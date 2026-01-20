@@ -24,7 +24,9 @@ class RemoteServerMonitor:
                     port=self.port,
                     username=self.username,
                     key_filename=self.key_file,
-                    timeout=5
+                    timeout=15,  # TCP连接超时15秒
+                    banner_timeout=10,  # Banner读取超时10秒
+                    auth_timeout=30  # 认证超时30秒
                 )
             else:
                 self.client.connect(
@@ -32,7 +34,9 @@ class RemoteServerMonitor:
                     port=self.port,
                     username=self.username,
                     password=self.password,
-                    timeout=5
+                    timeout=15,  # TCP连接超时15秒
+                    banner_timeout=10,  # Banner读取超时10秒
+                    auth_timeout=30  # 认证超时30秒
                 )
             return True
         except Exception as e:
@@ -44,10 +48,10 @@ class RemoteServerMonitor:
         if self.client:
             self.client.close()
     
-    def execute_command(self, command):
+    def execute_command(self, command, timeout=5):
         """执行远程命令"""
         try:
-            stdin, stdout, stderr = self.client.exec_command(command)
+            stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
             output = stdout.read().decode('utf-8').strip()
             error = stderr.read().decode('utf-8').strip()
             
@@ -58,22 +62,19 @@ class RemoteServerMonitor:
             return {'success': False, 'error': str(e)}
     
     def check_cpu(self):
-        """检查CPU使用率"""
-        # 使用 top 命令获取CPU使用率
-        result = self.execute_command("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1")
+        """检查CPU使用率 - 使用更快的命令"""
+        # 直接读取/proc/stat，更快
+        result = self.execute_command("awk '/^cpu /{print 100-($5*100/($2+$3+$4+$5+$6+$7+$8))}' /proc/stat", timeout=3)
         if result['success']:
             try:
                 return float(result['output'])
             except:
-                # 如果上面的命令不工作，尝试另一种方式
-                result = self.execute_command("grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {print usage}'")
-                if result['success']:
-                    return float(result['output'])
+                pass
         return None
     
     def check_memory(self):
-        """检查内存使用率"""
-        result = self.execute_command("free | grep Mem | awk '{print ($3/$2) * 100.0}'")
+        """检查内存使用率 - 使用更快的命令"""
+        result = self.execute_command("awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{print 100-100*a/t}' /proc/meminfo", timeout=3)
         if result['success']:
             try:
                 return float(result['output'])
@@ -82,8 +83,8 @@ class RemoteServerMonitor:
         return None
     
     def check_disk(self, path='/'):
-        """检查磁盘使用率"""
-        result = self.execute_command(f"df -h {path} | tail -1 | awk '{{print $5}}' | sed 's/%//'")
+        """检查磁盘使用率 - 使用更快的命令"""
+        result = self.execute_command(f"df {path} | tail -1 | awk '{{print $5}}' | sed 's/%//'", timeout=3)
         if result['success']:
             try:
                 return float(result['output'])

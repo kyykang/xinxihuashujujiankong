@@ -49,6 +49,9 @@ def run_monitors():
 
 def run_single_monitor(target):
     """执行单个监控任务"""
+    import time
+    start_time = time.time()
+    
     target_id = target['id']
     target_type = target['type']
     target_name = target['name']
@@ -67,9 +70,12 @@ def run_single_monitor(target):
         elif target_type == 'business':
             check_business(target_id, config)
         
+        elapsed = time.time() - start_time
+        print(f"  [{target_name}] 完成，耗时 {elapsed:.2f}秒")
         return True
     except Exception as e:
-        print(f"监控任务执行失败 [{target_name}]: {e}")
+        elapsed = time.time() - start_time
+        print(f"  [{target_name}] 失败，耗时 {elapsed:.2f}秒: {e}")
         return False
 
 def check_server(target_id, config):

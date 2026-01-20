@@ -27,11 +27,16 @@
             <td>{{ target.id }}</td>
             <td>{{ target.name }}</td>
             <td>
-                {% if target.type == 'server' %}服务器
-                {% elif target.type == 'storage' %}存储
-                {% elif target.type == 'application' %}应用
-                {% elif target.type == 'database' %}数据库
-                {% elif target.type == 'business' %}业务指标
+                {% if target.type == 'server' %}
+                <i class="bi bi-server text-primary"></i> 服务器
+                {% elif target.type == 'storage' %}
+                <i class="bi bi-hdd text-info"></i> 存储
+                {% elif target.type == 'application' %}
+                <i class="bi bi-globe text-success"></i> 应用
+                {% elif target.type == 'database' %}
+                <i class="bi bi-database text-warning"></i> 数据库
+                {% elif target.type == 'business' %}
+                <i class="bi bi-graph-up text-danger"></i> 业务指标
                 {% endif %}
             </td>
             <td>

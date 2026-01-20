@@ -1,12 +1,28 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    .btn-outline-hover-primary {
+        color: #6c757d;
+        background-color: transparent;
+        border: 2px solid #dee2e6;
+        transition: all 0.3s ease;
+    }
+    .btn-outline-hover-primary:hover {
+        color: #fff;
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="py-5 text-center">
     <h1 class="display-4">信息化运维监控系统</h1>
     <p class="lead">实时监控服务器、应用、数据库和业务指标</p>
     <div class="mt-4">
-        <a href="/dashboard" class="btn btn-primary btn-lg">进入监控仪表板</a>
-        <a href="/targets" class="btn btn-outline-secondary btn-lg">管理监控目标</a>
+        <a href="/dashboard" class="btn btn-outline-hover-primary btn-lg">进入监控仪表板</a>
+        <a href="/targets" class="btn btn-outline-hover-primary btn-lg">管理监控目标</a>
     </div>
 </div>
 

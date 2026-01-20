@@ -33,6 +33,12 @@ def test():
     """测试页面"""
     return render_template('test.html', current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
+@app.route('/favicon.ico')
+def favicon():
+    """返回favicon"""
+    # 返回一个简单的透明图标，避免404错误
+    return '', 204  # 204 No Content
+
 @app.route('/test-modal')
 def test_modal():
     """模态框测试页面"""

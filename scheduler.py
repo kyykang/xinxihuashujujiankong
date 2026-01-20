@@ -58,19 +58,21 @@ def run_single_monitor(target):
     
     try:
         config = json.loads(target['config'])
+        elapsed = 0
         
         if target_type == 'server':
-            check_server(target_id, config)
+            elapsed = check_server(target_id, config)
         elif target_type == 'storage':
-            check_storage(target_id, config)
+            elapsed = check_storage(target_id, config)
         elif target_type == 'application':
-            check_application(target_id, config)
+            elapsed = check_application(target_id, config)
         elif target_type == 'database':
-            check_database(target_id, config)
+            elapsed = check_database(target_id, config)
         elif target_type == 'business':
-            check_business(target_id, config)
+            elapsed = check_business(target_id, config)
         
-        elapsed = time.time() - start_time
+        if elapsed == 0:
+            elapsed = time.time() - start_time
         print(f"  [{target_name}] 完成，耗时 {elapsed:.2f}秒")
         return True
     except Exception as e:
@@ -80,6 +82,9 @@ def run_single_monitor(target):
 
 def check_server(target_id, config):
     """检查服务器"""
+    import time
+    start_time = time.time()
+    
     # 判断是本地还是远程服务器
     is_remote = config.get('is_remote', False)
     
@@ -88,6 +93,9 @@ def check_server(target_id, config):
         result = ServerMonitor.check_remote_server(config)
         
         if result['status'] == 'offline' or result['status'] == 'error':
+            elapsed = time.time() - start_time
+            result['execution_time'] = round(elapsed, 2)
+            
             db = get_db()
             cursor = db.cursor()
             cursor.execute(
@@ -97,7 +105,7 @@ def check_server(target_id, config):
             db.commit()
             send_alert(target_id, 'server', f"远程服务器连接失败: {config['host']}")
             db.close()
-            return
+            return elapsed
         
         cpu = result.get('cpu')
         memory = result.get('memory')
@@ -108,13 +116,16 @@ def check_server(target_id, config):
         memory = ServerMonitor.check_local_memory()
         disk = ServerMonitor.check_local_disk()
     
+    elapsed = time.time() - start_time
+    
     db = get_db()
     cursor = db.cursor()
     
     metrics = {
         'cpu': cpu,
         'memory': memory,
-        'disk': disk
+        'disk': disk,
+        'execution_time': round(elapsed, 2)
     }
     
     cursor.execute(
@@ -131,11 +142,18 @@ def check_server(target_id, config):
         send_alert(target_id, 'disk', f"磁盘使用率过高: {disk}%")
     
     db.close()
+    return elapsed
 
 def check_storage(target_id, config):
     """检查存储"""
+    import time
+    start_time = time.time()
+    
     path = config.get('path', '/')
     storage = StorageMonitor.check_storage(path)
+    
+    elapsed = time.time() - start_time
+    storage['execution_time'] = round(elapsed, 2)
     
     db = get_db()
     cursor = db.cursor()
@@ -150,11 +168,18 @@ def check_storage(target_id, config):
         send_alert(target_id, 'storage', f"存储使用率过高: {storage['percent']}%")
     
     db.close()
+    return elapsed
 
 def check_application(target_id, config):
     """检查应用"""
+    import time
+    start_time = time.time()
+    
     url = config.get('url')
     result = ApplicationMonitor.check_http(url)
+    
+    elapsed = time.time() - start_time
+    result['execution_time'] = round(elapsed, 2)
     
     db = get_db()
     cursor = db.cursor()
@@ -171,9 +196,13 @@ def check_application(target_id, config):
         send_alert(target_id, 'application', f"应用服务异常: {url}")
     
     db.close()
+    return elapsed
 
 def check_database(target_id, config):
     """检查数据库"""
+    import time
+    start_time = time.time()
+    
     result = DatabaseMonitor.check_mysql(
         config['host'],
         config['port'],
@@ -181,6 +210,9 @@ def check_database(target_id, config):
         config['password'],
         config.get('database', '')
     )
+    
+    elapsed = time.time() - start_time
+    result['execution_time'] = round(elapsed, 2)
     
     db = get_db()
     cursor = db.cursor()
@@ -197,10 +229,17 @@ def check_database(target_id, config):
         send_alert(target_id, 'database', f"数据库连接失败: {config['host']}")
     
     db.close()
+    return elapsed
 
 def check_business(target_id, config):
     """检查业务指标"""
+    import time
+    start_time = time.time()
+    
     result = BusinessMonitor.check_business_metric(config)
+    
+    elapsed = time.time() - start_time
+    result['execution_time'] = round(elapsed, 2)
     
     db = get_db()
     cursor = db.cursor()
@@ -243,6 +282,7 @@ def check_business(target_id, config):
         send_alert(target_id, 'business', alert_message)
     
     db.close()
+    return elapsed
 
 def start_scheduler():
     """启动调度器"""

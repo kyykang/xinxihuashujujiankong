@@ -91,9 +91,19 @@
             <div class="card-body">
                 <div style="position: relative; height: 200px;">
                     <canvas id="chart-{{ target.id }}"></canvas>
+                    <div id="loading-{{ target.id }}" class="text-center" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <div class="mt-2 text-muted">加载图表中...</div>
+                    </div>
                 </div>
-                <div class="mt-3">
+                <div class="mt-3 d-flex justify-content-between align-items-center">
                     <small class="text-muted">最后更新: {{ target.latest_data.created_at | local_time }}</small>
+                    {% set metric_data = target.latest_data.metric_value | from_json %}
+                    <small class="text-muted">
+                        <i class="bi bi-stopwatch"></i> 耗时: {{ metric_data.execution_time|default(0)|round(2) }}秒
+                    </small>
                 </div>
             </div>
         </div>
@@ -116,19 +126,25 @@
                     {% else %}
                     {% for target in targets %}
                     {% if target.type == 'application' %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
                             <strong>{{ target.name }}</strong>
                             {% if target.latest_data %}
-                            <br><small class="text-muted">{{ target.latest_data.created_at | local_time }}</small>
+                            <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ '在线' if target.latest_data.status == 'normal' else '离线' }}
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">未知</span>
                             {% endif %}
                         </div>
                         {% if target.latest_data %}
-                        <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
-                            {{ '在线' if target.latest_data.status == 'normal' else '离线' }}
-                        </span>
-                        {% else %}
-                        <span class="badge bg-secondary">未知</span>
+                        {% set app_data = target.latest_data.metric_value | from_json %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">{{ target.latest_data.created_at | local_time }}</small>
+                            <small class="text-muted">
+                                <i class="bi bi-stopwatch"></i> 耗时: {{ app_data.execution_time|default(0)|round(2) }}秒
+                            </small>
+                        </div>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -151,19 +167,25 @@
                     {% else %}
                     {% for target in targets %}
                     {% if target.type == 'database' %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
                             <strong>{{ target.name }}</strong>
                             {% if target.latest_data %}
-                            <br><small class="text-muted">{{ target.latest_data.created_at | local_time }}</small>
+                            <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ '在线' if target.latest_data.status == 'normal' else '离线' }}
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">未知</span>
                             {% endif %}
                         </div>
                         {% if target.latest_data %}
-                        <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
-                            {{ '在线' if target.latest_data.status == 'normal' else '离线' }}
-                        </span>
-                        {% else %}
-                        <span class="badge bg-secondary">未知</span>
+                        {% set db_data = target.latest_data.metric_value | from_json %}
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">{{ target.latest_data.created_at | local_time }}</small>
+                            <small class="text-muted">
+                                <i class="bi bi-stopwatch"></i> 耗时: {{ db_data.execution_time|default(0)|round(2) }}秒
+                            </small>
+                        </div>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -348,6 +370,13 @@ function initServerCharts() {
                     }
                 }
             });
+            
+            // 隐藏加载提示
+            const loading = document.getElementById('loading-{{ target.id }}');
+            if (loading) {
+                loading.style.display = 'none';
+            }
+            
             console.log('图表 {{ target.id }} 初始化成功');
         } else {
             console.error('找不到canvas元素: chart-{{ target.id }}');
@@ -412,14 +441,29 @@ function updateApplicationList(applications) {
         const statusClass = app.status === 'normal' ? 'bg-success' : 'bg-danger';
         const statusText = app.status === 'normal' ? '在线' : '离线';
         
+        // 解析数据获取execution_time
+        let appData = {};
+        try {
+            appData = typeof app.data === 'string' ? JSON.parse(app.data) : app.data;
+        } catch (e) {
+            console.error('解析应用数据失败:', e);
+        }
+        
+        const executionTime = appData.execution_time ? appData.execution_time.toFixed(2) : '0.00';
+        
         const item = document.createElement('div');
-        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.className = 'list-group-item';
         item.innerHTML = `
-            <div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
                 <strong>${app.name}</strong>
-                <br><small class="text-muted">${app.time}</small>
+                <span class="badge ${statusClass}">${statusText}</span>
             </div>
-            <span class="badge ${statusClass}">${statusText}</span>
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted">${app.time}</small>
+                <small class="text-muted">
+                    <i class="bi bi-stopwatch"></i> 耗时: ${executionTime}秒
+                </small>
+            </div>
         `;
         listElement.appendChild(item);
     });
@@ -440,14 +484,29 @@ function updateDatabaseList(databases) {
         const statusClass = db.status === 'normal' ? 'bg-success' : 'bg-danger';
         const statusText = db.status === 'normal' ? '在线' : '离线';
         
+        // 解析数据获取execution_time
+        let dbData = {};
+        try {
+            dbData = typeof db.data === 'string' ? JSON.parse(db.data) : db.data;
+        } catch (e) {
+            console.error('解析数据库数据失败:', e);
+        }
+        
+        const executionTime = dbData.execution_time ? dbData.execution_time.toFixed(2) : '0.00';
+        
         const item = document.createElement('div');
-        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.className = 'list-group-item';
         item.innerHTML = `
-            <div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
                 <strong>${db.name}</strong>
-                <br><small class="text-muted">${db.time}</small>
+                <span class="badge ${statusClass}">${statusText}</span>
             </div>
-            <span class="badge ${statusClass}">${statusText}</span>
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted">${db.time}</small>
+                <small class="text-muted">
+                    <i class="bi bi-stopwatch"></i> 耗时: ${executionTime}秒
+                </small>
+            </div>
         `;
         listElement.appendChild(item);
     });

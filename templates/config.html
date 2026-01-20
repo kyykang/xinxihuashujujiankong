@@ -115,7 +115,11 @@ function saveConfig() {
     .then(response => response.json())
     .then(result => {
         if (result.success) {
-            alert('配置保存成功！');
+            if (result.need_restart) {
+                alert(result.message + '\n\n请停止当前运行的系统（Ctrl+C），然后重新运行：\npython3 app.py');
+            } else {
+                alert('配置保存成功！');
+            }
         }
     });
 }

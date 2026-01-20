@@ -240,5 +240,17 @@ def check_business(target_id, config):
 
 def start_scheduler():
     """启动调度器"""
-    scheduler.add_job(run_monitors, 'interval', seconds=Config.CHECK_INTERVAL)
+    # 从数据库读取检查间隔配置
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("SELECT value FROM system_config WHERE key = 'check_interval'")
+    result = cursor.fetchone()
+    db.close()
+    
+    # 使用数据库配置，如果没有则使用默认值
+    check_interval = int(result['value']) if result else Config.CHECK_INTERVAL
+    
+    print(f"启动监控调度器，检查间隔: {check_interval}秒")
+    scheduler.add_job(run_monitors, 'interval', seconds=check_interval)
     scheduler.start()
+

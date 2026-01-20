@@ -463,14 +463,25 @@ def api_config():
     
     if request.method == 'POST':
         data = request.json
+        need_restart = False
+        
         for key, value in data.items():
             cursor.execute(
                 'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
                 (key, value)
             )
+            # 如果修改了检查间隔，需要重启系统
+            if key == 'check_interval':
+                need_restart = True
+        
         db.commit()
         db.close()
-        return jsonify({'success': True})
+        
+        return jsonify({
+            'success': True,
+            'need_restart': need_restart,
+            'message': '配置已保存' + ('，请重启系统使检查间隔生效' if need_restart else '')
+        })
     
     cursor.execute('SELECT * FROM system_config')
     config = {row['key']: row['value'] for row in cursor.fetchall()}

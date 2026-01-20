@@ -208,7 +208,33 @@ def check_business(target_id, config):
     db.commit()
     
     if result.get('alert'):
-        send_alert(target_id, 'business', f"业务指标异常: {result.get('value')}")
+        # 构建详细的告警信息
+        alert_message = f"业务指标异常: {result.get('value')}"
+        
+        # 如果有详细数据，添加到告警信息中
+        if result.get('detail_data'):
+            detail_data = result.get('detail_data')
+            row_count = result.get('row_count', 0)
+            
+            # 限制显示的行数，避免信息过长
+            max_display_rows = 10
+            display_rows = min(row_count, max_display_rows)
+            
+            alert_message += f" (共{row_count}条记录"
+            if row_count > max_display_rows:
+                alert_message += f"，显示前{max_display_rows}条"
+            alert_message += ")\n"
+            
+            # 添加详细数据
+            for i, row in enumerate(detail_data[:max_display_rows]):
+                # 将元组转换为字符串
+                row_str = ', '.join(str(item) for item in row)
+                alert_message += f"  [{i+1}] {row_str}\n"
+            
+            if row_count > max_display_rows:
+                alert_message += f"  ... 还有 {row_count - max_display_rows} 条记录"
+        
+        send_alert(target_id, 'business', alert_message)
     
     db.close()
 

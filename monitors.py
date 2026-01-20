@@ -159,10 +159,23 @@ class BusinessMonitor:
                 query
             )
             if result['status'] == 'success' and result['data']:
+                # 获取第一行第一列作为数值（用于阈值比较）
                 value = result['data'][0][0]
+                
+                # 判断是否需要告警
+                alert = value > threshold if threshold else False
+                
+                # 如果触发告警，获取详细数据
+                detail_data = None
+                if alert and len(result['data']) > 0:
+                    # 如果查询返回多列，保存详细信息
+                    detail_data = result['data']
+                
                 return {
                     'value': value,
-                    'alert': value > threshold if threshold else False
+                    'alert': alert,
+                    'detail_data': detail_data,
+                    'row_count': len(result['data'])
                 }
         
         return {'status': 'error'}

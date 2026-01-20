@@ -160,22 +160,28 @@ class BusinessMonitor:
             )
             if result['status'] == 'success' and result['data']:
                 # 获取第一行第一列作为数值（用于阈值比较）
-                value = result['data'][0][0]
+                value = result['data'][0][0] if result['data'] else 0
+                
+                # 获取总行数
+                row_count = len(result['data'])
                 
                 # 判断是否需要告警
-                alert = value > threshold if threshold else False
+                alert = value > threshold if threshold and isinstance(value, (int, float)) else False
                 
-                # 如果触发告警，获取详细数据
+                # 保存所有查询结果（用于显示）
+                all_data = result['data']
+                
+                # 如果触发告警，保存详细数据用于告警信息
                 detail_data = None
                 if alert and len(result['data']) > 0:
-                    # 如果查询返回多列，保存详细信息
                     detail_data = result['data']
                 
                 return {
                     'value': value,
                     'alert': alert,
                     'detail_data': detail_data,
-                    'row_count': len(result['data'])
+                    'all_data': all_data,  # 新增：保存所有数据
+                    'row_count': row_count
                 }
         
         return {'status': 'error'}

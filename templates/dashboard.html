@@ -219,8 +219,29 @@
                                     </small>
                                 </div>
                                 
-                                <!-- 显示详细数据 -->
-                                {% if metric_data.detail_data and metric_data.detail_data|length > 0 %}
+                                <!-- 显示所有数据 -->
+                                {% if metric_data.all_data and metric_data.all_data|length > 0 %}
+                                <div class="{% if metric_data.alert %}alert alert-warning{% else %}border rounded p-2{% endif %} mb-0">
+                                    {% if metric_data.alert %}
+                                    <strong>异常记录（前5条）：</strong>
+                                    {% else %}
+                                    <strong>查询结果（前5条）：</strong>
+                                    {% endif %}
+                                    <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
+                                        {% for row in metric_data.all_data[:5] %}
+                                        <div class="mb-1">
+                                            [{{ loop.index }}] {{ row | join(', ') }}
+                                        </div>
+                                        {% endfor %}
+                                        {% if metric_data.row_count > 5 %}
+                                        <div class="text-muted mt-2">
+                                            ... 还有 {{ metric_data.row_count - 5 }} 条记录
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% elif metric_data.detail_data and metric_data.detail_data|length > 0 %}
+                                <!-- 兼容旧数据：如果没有all_data但有detail_data -->
                                 <div class="alert alert-warning mb-0">
                                     <strong>异常记录（前5条）：</strong>
                                     <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
@@ -440,14 +461,19 @@ function updateBusinessMetricsList(business) {
         
         // 构建详细数据HTML
         let detailHtml = '';
-        if (metricData.detail_data && metricData.detail_data.length > 0) {
+        const dataToShow = metricData.all_data || metricData.detail_data;
+        
+        if (dataToShow && dataToShow.length > 0) {
+            const alertClass = metricData.alert ? 'alert alert-warning' : 'border rounded p-2';
+            const title = metricData.alert ? '异常记录（前5条）：' : '查询结果（前5条）：';
+            
             detailHtml = `
-                <div class="alert alert-warning mb-0">
-                    <strong>异常记录（前5条）：</strong>
+                <div class="${alertClass} mb-0">
+                    <strong>${title}</strong>
                     <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
             `;
             
-            metricData.detail_data.slice(0, 5).forEach((row, index) => {
+            dataToShow.slice(0, 5).forEach((row, index) => {
                 detailHtml += `<div class="mb-1">[${index + 1}] ${row.join(', ')}</div>`;
             });
             

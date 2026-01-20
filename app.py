@@ -20,6 +20,14 @@ def relative_time_filter(time_str):
     """将时间转换为相对时间"""
     return format_relative_time(time_str)
 
+@app.template_filter('from_json')
+def from_json_filter(json_str):
+    """将JSON字符串转换为Python对象"""
+    try:
+        return json.loads(json_str) if isinstance(json_str, str) else json_str
+    except:
+        return {}
+
 @app.route('/test')
 def test():
     """测试页面"""
@@ -378,6 +386,7 @@ def api_dashboard_stats():
         'servers': [],
         'applications': [],
         'databases': [],
+        'business': [],
         'summary': {
             'total': len(targets),
             'online': 0,
@@ -411,6 +420,8 @@ def api_dashboard_stats():
                 stats['applications'].append(target_data)
             elif target['type'] == 'database':
                 stats['databases'].append(target_data)
+            elif target['type'] == 'business':
+                stats['business'].append(target_data)
             
             # 统计状态
             if latest['status'] == 'normal':

@@ -466,6 +466,104 @@ def api_config():
     db.close()
     return jsonify(config)
 
+@app.route('/api/database-size')
+def api_database_size():
+    """获取数据库大小"""
+    import os
+    try:
+        size_bytes = os.path.getsize(Config.DATABASE)
+        
+        # 转换为合适的单位
+        if size_bytes < 1024:
+            size_str = f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            size_str = f"{size_bytes / 1024:.2f} KB"
+        else:
+            size_str = f"{size_bytes / (1024 * 1024):.2f} MB"
+        
+        return jsonify({
+            'size': size_str,
+            'bytes': size_bytes
+        })
+    except Exception as e:
+        return jsonify({
+            'size': 'N/A',
+            'error': str(e)
+        })
+
+@app.route('/api/clear-alerts', methods=['POST'])
+def api_clear_alerts():
+    """清除告警记录"""
+    data = request.json
+    range_type = data.get('range', 'all')
+    clear_monitor_data = data.get('clear_monitor_data', False)
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    try:
+        # 根据范围删除告警记录
+        if range_type == 'all':
+            cursor.execute('SELECT COUNT(*) as count FROM alerts')
+            count_before = cursor.fetchone()['count']
+            cursor.execute('DELETE FROM alerts')
+        elif range_type == '7days':
+            cursor.execute("SELECT COUNT(*) as count FROM alerts WHERE created_at < datetime('now', '-7 days')")
+            count_before = cursor.fetchone()['count']
+            cursor.execute("DELETE FROM alerts WHERE created_at < datetime('now', '-7 days')")
+        elif range_type == '30days':
+            cursor.execute("SELECT COUNT(*) as count FROM alerts WHERE created_at < datetime('now', '-30 days')")
+            count_before = cursor.fetchone()['count']
+            cursor.execute("DELETE FROM alerts WHERE created_at < datetime('now', '-30 days')")
+        elif range_type == '90days':
+            cursor.execute("SELECT COUNT(*) as count FROM alerts WHERE created_at < datetime('now', '-90 days')")
+            count_before = cursor.fetchone()['count']
+            cursor.execute("DELETE FROM alerts WHERE created_at < datetime('now', '-90 days')")
+        elif range_type == 'resolved':
+            cursor.execute("SELECT COUNT(*) as count FROM alerts WHERE status = 'resolved'")
+            count_before = cursor.fetchone()['count']
+            cursor.execute("DELETE FROM alerts WHERE status = 'resolved'")
+        else:
+            db.close()
+            return jsonify({'success': False, 'error': '无效的清除范围'})
+        
+        deleted_alerts = count_before
+        deleted_monitor_data = 0
+        
+        # 如果需要清除监控数据
+        if clear_monitor_data:
+            if range_type == 'all':
+                cursor.execute('SELECT COUNT(*) as count FROM monitor_data')
+                count_before = cursor.fetchone()['count']
+                cursor.execute('DELETE FROM monitor_data')
+                deleted_monitor_data = count_before
+            elif range_type in ['7days', '30days', '90days']:
+                days = int(range_type.replace('days', ''))
+                cursor.execute(f"SELECT COUNT(*) as count FROM monitor_data WHERE created_at < datetime('now', '-{days} days')")
+                count_before = cursor.fetchone()['count']
+                cursor.execute(f"DELETE FROM monitor_data WHERE created_at < datetime('now', '-{days} days')")
+                deleted_monitor_data = count_before
+        
+        db.commit()
+        
+        # 优化数据库（回收空间）
+        cursor.execute('VACUUM')
+        
+        db.close()
+        
+        return jsonify({
+            'success': True,
+            'deleted_alerts': deleted_alerts,
+            'deleted_monitor_data': deleted_monitor_data
+        })
+    
+    except Exception as e:
+        db.close()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 if __name__ == '__main__':
     init_db()
     start_scheduler()

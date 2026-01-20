@@ -5,6 +5,47 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">告警记录</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#clearAlertsModal">
+            <i class="bi bi-trash"></i> 清除记录
+        </button>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">总告警数</h6>
+                <h3>{{ alerts|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">待处理</h6>
+                <h3 class="text-danger">{{ alerts|selectattr('status', 'equalto', 'pending')|list|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">已处理</h6>
+                <h3 class="text-success">{{ alerts|selectattr('status', 'equalto', 'resolved')|list|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="text-muted">数据库大小</h6>
+                <h3 id="dbSize">-</h3>
+            </div>
+        </div>
+    </div>
 </div>
 
 <table class="table table-hover">
@@ -39,4 +80,109 @@
         {% endfor %}
     </tbody>
 </table>
+
+<!-- 清除告警记录模态框 -->
+<div class="modal fade" id="clearAlertsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">清除告警记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>警告：</strong>此操作将从数据库中永久删除记录，无法恢复！
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">清除范围</label>
+                    <select class="form-select" id="clearRange">
+                        <option value="all">清除所有告警记录</option>
+                        <option value="7days">清除7天前的记录</option>
+                        <option value="30days">清除30天前的记录</option>
+                        <option value="90days">清除90天前的记录</option>
+                        <option value="resolved">仅清除已处理的记录</option>
+                    </select>
+                </div>
+                
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="clearMonitorData">
+                    <label class="form-check-label" for="clearMonitorData">
+                        同时清除监控数据（释放更多空间）
+                    </label>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">输入 <code>DELETE</code> 确认删除</label>
+                    <input type="text" class="form-control" id="confirmText" placeholder="DELETE">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="clearAlerts()">
+                    <i class="bi bi-trash"></i> 确认清除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 获取数据库大小
+function getDbSize() {
+    fetch('/api/database-size')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('dbSize').textContent = data.size;
+        })
+        .catch(error => console.error('获取数据库大小失败:', error));
+}
+
+// 清除告警记录
+function clearAlerts() {
+    const confirmText = document.getElementById('confirmText').value;
+    
+    if (confirmText !== 'DELETE') {
+        alert('请输入 DELETE 确认删除');
+        return;
+    }
+    
+    const range = document.getElementById('clearRange').value;
+    const clearMonitorData = document.getElementById('clearMonitorData').checked;
+    
+    if (!confirm('确定要清除告警记录吗？此操作无法撤销！')) {
+        return;
+    }
+    
+    fetch('/api/clear-alerts', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            range: range,
+            clear_monitor_data: clearMonitorData
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`成功清除 ${result.deleted_alerts} 条告警记录` + 
+                  (result.deleted_monitor_data ? `，${result.deleted_monitor_data} 条监控数据` : ''));
+            location.reload();
+        } else {
+            alert('清除失败: ' + (result.error || '未知错误'));
+        }
+    })
+    .catch(error => {
+        alert('清除失败: ' + error);
+    });
+}
+
+// 页面加载时获取数据库大小
+document.addEventListener('DOMContentLoaded', function() {
+    getDbSize();
+});
+</script>
 {% endblock %}

@@ -158,29 +158,39 @@ class BusinessMonitor:
                 config['database'],
                 query
             )
-            if result['status'] == 'success' and result['data']:
-                # 获取第一行第一列作为数值（用于阈值比较）
-                value = result['data'][0][0] if result['data'] else 0
-                
+            if result['status'] == 'success':
                 # 获取总行数
-                row_count = len(result['data'])
+                row_count = len(result['data']) if result['data'] else 0
                 
-                # 判断是否需要告警
-                alert = value > threshold if threshold and isinstance(value, (int, float)) else False
+                # 获取第一行第一列作为数值（用于显示和阈值比较）
+                value = result['data'][0][0] if result['data'] and len(result['data']) > 0 else 0
                 
                 # 保存所有查询结果（用于显示）
-                all_data = result['data']
+                all_data = result['data'] if result['data'] else []
+                
+                # 判断是否需要告警
+                alert = False
+                if threshold is None or threshold == 0:
+                    # 阈值为0或未设置：只要有数据就告警（存在模式）
+                    alert = row_count > 0
+                else:
+                    # 阈值大于0：当值超过阈值时告警（阈值模式）
+                    if isinstance(value, (int, float)):
+                        alert = value > threshold
+                    else:
+                        # 如果第一列不是数字，则按记录数判断
+                        alert = row_count > threshold
                 
                 # 如果触发告警，保存详细数据用于告警信息
                 detail_data = None
-                if alert and len(result['data']) > 0:
-                    detail_data = result['data']
+                if alert and len(all_data) > 0:
+                    detail_data = all_data
                 
                 return {
                     'value': value,
                     'alert': alert,
                     'detail_data': detail_data,
-                    'all_data': all_data,  # 新增：保存所有数据
+                    'all_data': all_data,
                     'row_count': row_count
                 }
         

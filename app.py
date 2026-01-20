@@ -587,6 +587,11 @@ def api_clear_alerts():
         })
 
 if __name__ == '__main__':
+    import os
     init_db()
-    start_scheduler()
+    
+    # 只在主进程中启动调度器（避免debug模式下重复启动）
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        start_scheduler()
+    
     app.run(host='0.0.0.0', port=8080, debug=True)

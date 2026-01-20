@@ -425,10 +425,42 @@ function updateApplicationList(applications) {
     });
 }
 
+// 更新数据库列表
+function updateDatabaseList(databases) {
+    const listElement = document.getElementById('databaseList');
+    if (!listElement) return;
+    
+    if (databases.length === 0) {
+        listElement.innerHTML = '<div class="list-group-item text-muted text-center">暂无数据库监控</div>';
+        return;
+    }
+    
+    listElement.innerHTML = '';
+    databases.forEach(db => {
+        const statusClass = db.status === 'normal' ? 'bg-success' : 'bg-danger';
+        const statusText = db.status === 'normal' ? '在线' : '离线';
+        
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <div>
+                <strong>${db.name}</strong>
+                <br><small class="text-muted">${db.time}</small>
+            </div>
+            <span class="badge ${statusClass}">${statusText}</span>
+        `;
+        listElement.appendChild(item);
+    });
+}
+
 // 更新业务指标列表
 function updateBusinessMetricsList(business) {
+    console.log('更新业务指标列表，数据:', business);
     const listElement = document.getElementById('businessMetricsList');
-    if (!listElement) return;
+    if (!listElement) {
+        console.error('businessMetricsList 元素未找到');
+        return;
+    }
     
     if (business.length === 0) {
         listElement.innerHTML = '<div class="col-12"><div class="text-muted text-center py-3">暂无业务指标监控</div></div>';
@@ -437,79 +469,89 @@ function updateBusinessMetricsList(business) {
     
     listElement.innerHTML = '';
     business.forEach(biz => {
-        let statusClass = 'secondary';
-        let statusText = '未知';
-        
-        if (biz.status === 'normal') {
-            statusClass = 'success';
-            statusText = '正常';
-        } else if (biz.status === 'warning') {
-            statusClass = 'warning';
-            statusText = '告警';
-        } else {
-            statusClass = 'danger';
-            statusText = '异常';
-        }
-        
-        // 解析数据
-        let metricData = {};
         try {
-            metricData = typeof biz.data === 'string' ? JSON.parse(biz.data) : biz.data;
-        } catch (e) {
-            console.error('解析业务指标数据失败:', e);
-        }
-        
-        // 构建详细数据HTML
-        let detailHtml = '';
-        const dataToShow = metricData.all_data || metricData.detail_data;
-        
-        if (dataToShow && dataToShow.length > 0) {
-            const alertClass = metricData.alert ? 'alert alert-warning' : 'border rounded p-2';
-            const title = metricData.alert ? '异常记录（前5条）：' : '查询结果（前5条）：';
+            console.log('处理业务指标:', biz.name);
+            let statusClass = 'secondary';
+            let statusText = '未知';
             
-            detailHtml = `
-                <div class="${alertClass} mb-0">
-                    <strong>${title}</strong>
-                    <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
-            `;
-            
-            dataToShow.slice(0, 5).forEach((row, index) => {
-                detailHtml += `<div class="mb-1">[${index + 1}] ${row.join(', ')}</div>`;
-            });
-            
-            if (metricData.row_count > 5) {
-                detailHtml += `<div class="text-muted mt-2">... 还有 ${metricData.row_count - 5} 条记录</div>`;
+            if (biz.status === 'normal') {
+                statusClass = 'success';
+                statusText = '正常';
+            } else if (biz.status === 'warning') {
+                statusClass = 'warning';
+                statusText = '告警';
+            } else {
+                statusClass = 'danger';
+                statusText = '异常';
             }
             
-            detailHtml += `</div></div>`;
+            // 解析数据
+            let metricData = {};
+            try {
+                metricData = typeof biz.data === 'string' ? JSON.parse(biz.data) : biz.data;
+                console.log('解析后的数据:', metricData);
+            } catch (e) {
+                console.error('解析业务指标数据失败:', e, '原始数据:', biz.data);
+                return;
+            }
+            
+            // 构建详细数据HTML
+            let detailHtml = '';
+            const dataToShow = metricData.all_data || metricData.detail_data;
+            
+            if (dataToShow && dataToShow.length > 0) {
+                console.log('显示数据，条数:', dataToShow.length);
+                const alertClass = metricData.alert ? 'alert alert-warning' : 'border rounded p-2';
+                const title = metricData.alert ? '异常记录（前5条）：' : '查询结果（前5条）：';
+                
+                detailHtml = `
+                    <div class="${alertClass} mb-0">
+                        <strong>${title}</strong>
+                        <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
+                `;
+                
+                dataToShow.slice(0, 5).forEach((row, index) => {
+                    detailHtml += `<div class="mb-1">[${index + 1}] ${row.join(', ')}</div>`;
+                });
+                
+                if (metricData.row_count > 5) {
+                    detailHtml += `<div class="text-muted mt-2">... 还有 ${metricData.row_count - 5} 条记录</div>`;
+                }
+                
+                detailHtml += `</div></div>`;
+            }
+            
+            const item = document.createElement('div');
+            item.className = 'col-md-6 mb-3';
+            item.innerHTML = `
+                <div class="card border-${statusClass === 'warning' ? 'warning' : 'secondary'}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>${biz.name}</strong>
+                        <span class="badge bg-${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h3 class="mb-0 ${metricData.alert ? 'text-warning' : ''}">${metricData.value || 0}</h3>
+                            <small class="text-muted">
+                                ${metricData.row_count ? `共 ${metricData.row_count} 条记录` : ''}
+                            </small>
+                        </div>
+                        ${detailHtml}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i> ${biz.time}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            listElement.appendChild(item);
+            console.log('业务指标卡片已添加:', biz.name);
+        } catch (e) {
+            console.error('处理业务指标失败:', biz.name, e);
         }
-        
-        const item = document.createElement('div');
-        item.className = 'col-md-6 mb-3';
-        item.innerHTML = `
-            <div class="card border-${statusClass === 'warning' ? 'warning' : 'secondary'}">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong>${biz.name}</strong>
-                    <span class="badge bg-${statusClass}">${statusText}</span>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <h3 class="mb-0 ${metricData.alert ? 'text-warning' : ''}">${metricData.value || 0}</h3>
-                        <small class="text-muted">
-                            ${metricData.row_count ? `共 ${metricData.row_count} 条记录` : ''}
-                        </small>
-                    </div>
-                    ${detailHtml}
-                    <div class="mt-2">
-                        <small class="text-muted">
-                            <i class="bi bi-clock"></i> ${biz.time}
-                        </small>
-                    </div>
-                </div>
-            </div>
-        `;
-        listElement.appendChild(item);
     });
+    console.log('业务指标列表更新完成');
 }
 
 // 刷新仪表板（局部刷新，不重载整个页面）

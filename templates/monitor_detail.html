@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}{{ target.name }} - 监控详情{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-{% if target.type == 'server' %}server{% elif target.type == 'application' %}globe{% elif target.type == 'database' %}database{% else %}graph-up{% endif %}"></i>
+        {{ target.name }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="/targets" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回
+        </a>
+    </div>
+</div>
+
+<!-- 基本信息 -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">基本信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>监控类型:</strong> 
+                        {% if target.type == 'server' %}服务器监控
+                        {% elif target.type == 'storage' %}存储监控
+                        {% elif target.type == 'application' %}应用监控
+                        {% elif target.type == 'database' %}数据库监控
+                        {% elif target.type == 'business' %}业务指标监控
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>状态:</strong>
+                        <span class="badge {% if target.enabled %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ '启用' if target.enabled else '禁用' }}
+                        </span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>创建时间:</strong> {{ target.created_at }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>数据点数:</strong> <span id="dataPointCount">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 历史趋势图 -->
+{% if target.type == 'server' %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">资源使用趋势</h5>
+                <div>
+                    <select class="form-select form-select-sm" id="timeRange" onchange="updateCharts()">
+                        <option value="24">最近24小时</option>
+                        <option value="12">最近12小时</option>
+                        <option value="6">最近6小时</option>
+                        <option value="1">最近1小时</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="position: relative; height: 300px;">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">CPU 使用率</h6>
+            </div>
+            <div class="card-body">
+                <div style="position: relative; height: 200px;">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">内存使用率</h6>
+            </div>
+            <div class="card-body">
+                <div style="position: relative; height: 200px;">
+                    <canvas id="memoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">磁盘使用率</h6>
+            </div>
+            <div class="card-body">
+                <div style="position: relative; height: 200px;">
+                    <canvas id="diskChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 最近监控记录 -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">最近监控记录</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="dataTable">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>状态</th>
+                                <th>监控数据</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                            <tr>
+                                <td colspan="3" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const targetId = {{ target.id }};
+let trendChart, cpuChart, memoryChart, diskChart;
+
+// 加载监控数据
+function loadMonitorData(hours = 24) {
+    const limit = hours * 60; // 假设每分钟一个数据点
+    
+    fetch(`/api/monitor-data/${targetId}?limit=${limit}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('dataPointCount').textContent = data.length;
+            updateCharts(data);
+            updateTable(data);
+        })
+        .catch(error => {
+            console.error('加载数据失败:', error);
+        });
+}
+
+// 更新图表
+function updateCharts(data = null) {
+    if (!data) {
+        const hours = parseInt(document.getElementById('timeRange').value);
+        loadMonitorData(hours);
+        return;
+    }
+    
+    {% if target.type == 'server' %}
+    const labels = [];
+    const cpuData = [];
+    const memoryData = [];
+    const diskData = [];
+    
+    data.forEach(item => {
+        try {
+            const metrics = JSON.parse(item.metric_value);
+            const time = new Date(item.created_at);
+            labels.push(time.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}));
+            cpuData.push(metrics.cpu || 0);
+            memoryData.push(metrics.memory || 0);
+            diskData.push(metrics.disk || 0);
+        } catch (e) {
+            console.error('解析数据失败:', e);
+        }
+    });
+    
+    // 趋势图
+    if (trendChart) trendChart.destroy();
+    const trendCtx = document.getElementById('trendChart');
+    trendChart = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'CPU',
+                    data: cpuData,
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: '内存',
+                    data: memoryData,
+                    borderColor: 'rgba(255, 206, 86, 1)',
+                    backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: '磁盘',
+                    data: diskData,
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // CPU 饼图
+    const latestCpu = cpuData[cpuData.length - 1] || 0;
+    if (cpuChart) cpuChart.destroy();
+    cpuChart = new Chart(document.getElementById('cpuChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['已使用', '空闲'],
+            datasets: [{
+                data: [latestCpu, 100 - latestCpu],
+                backgroundColor: ['rgba(54, 162, 235, 0.7)', 'rgba(200, 200, 200, 0.3)']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // 内存饼图
+    const latestMemory = memoryData[memoryData.length - 1] || 0;
+    if (memoryChart) memoryChart.destroy();
+    memoryChart = new Chart(document.getElementById('memoryChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['已使用', '空闲'],
+            datasets: [{
+                data: [latestMemory, 100 - latestMemory],
+                backgroundColor: ['rgba(255, 206, 86, 0.7)', 'rgba(200, 200, 200, 0.3)']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // 磁盘饼图
+    const latestDisk = diskData[diskData.length - 1] || 0;
+    if (diskChart) diskChart.destroy();
+    diskChart = new Chart(document.getElementById('diskChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['已使用', '空闲'],
+            datasets: [{
+                data: [latestDisk, 100 - latestDisk],
+                backgroundColor: ['rgba(255, 99, 132, 0.7)', 'rgba(200, 200, 200, 0.3)']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    {% endif %}
+}
+
+// 更新表格
+function updateTable(data) {
+    const tbody = document.getElementById('dataTableBody');
+    tbody.innerHTML = '';
+    
+    // 只显示最近50条
+    const recentData = data.slice(-50).reverse();
+    
+    recentData.forEach(item => {
+        const row = tbody.insertRow();
+        
+        // 时间
+        const timeCell = row.insertCell();
+        timeCell.textContent = item.created_at;
+        
+        // 状态
+        const statusCell = row.insertCell();
+        const badge = document.createElement('span');
+        badge.className = `badge ${item.status === 'normal' ? 'bg-success' : 'bg-danger'}`;
+        badge.textContent = item.status === 'normal' ? '正常' : '异常';
+        statusCell.appendChild(badge);
+        
+        // 数据
+        const dataCell = row.insertCell();
+        try {
+            const metrics = JSON.parse(item.metric_value);
+            let dataText = '';
+            
+            {% if target.type == 'server' %}
+            dataText = `CPU: ${(metrics.cpu || 0).toFixed(2)}%, 内存: ${(metrics.memory || 0).toFixed(2)}%, 磁盘: ${(metrics.disk || 0).toFixed(2)}%`;
+            {% else %}
+            dataText = JSON.stringify(metrics);
+            {% endif %}
+            
+            dataCell.textContent = dataText;
+        } catch (e) {
+            dataCell.textContent = item.metric_value;
+        }
+    });
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadMonitorData(24);
+    
+    // 每30秒自动刷新
+    setInterval(() => {
+        const hours = parseInt(document.getElementById('timeRange')?.value || 24);
+        loadMonitorData(hours);
+    }, 30000);
+});
+</script>
+{% endblock %}

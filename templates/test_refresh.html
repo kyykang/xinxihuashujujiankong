@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>刷新功能测试</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.8.0/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>刷新功能测试</h1>
+        
+        <div class="alert alert-info">
+            <h4>测试步骤：</h4>
+            <ol>
+                <li>点击下面的"刷新"按钮</li>
+                <li>观察按钮状态变化</li>
+                <li>查看是否显示成功提示</li>
+            </ol>
+        </div>
+        
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">测试区域</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard(event)">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                </button>
+            </div>
+            <div class="card-body">
+                <p>在线服务数: <strong id="onlineCount">0</strong></p>
+                <p>离线服务数: <strong id="offlineCount">0</strong></p>
+                <p>最后更新: <span id="lastUpdate">-</span></p>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <h4>控制台日志：</h4>
+            <div id="console" class="border p-3" style="height: 200px; overflow-y: auto; background: #f8f9fa; font-family: monospace;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 日志函数
+        function log(message) {
+            const console = document.getElementById('console');
+            const time = new Date().toLocaleTimeString();
+            console.innerHTML += `[${time}] ${message}\n`;
+            console.scrollTop = console.scrollHeight;
+        }
+
+        // 更新统计数据
+        function updateStats() {
+            log('开始更新统计数据...');
+            fetch('/api/dashboard-stats')
+                .then(response => {
+                    log('API 响应状态: ' + response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    log('收到数据: ' + JSON.stringify(data.summary));
+                    document.getElementById('onlineCount').textContent = data.summary.online;
+                    document.getElementById('offlineCount').textContent = data.summary.offline + data.summary.warning;
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    log('✓ 统计数据更新成功');
+                })
+                .catch(error => {
+                    log('✗ 更新失败: ' + error);
+                    console.error('更新统计失败:', error);
+                });
+        }
+
+        // 刷新仪表板
+        function refreshDashboard(event) {
+            log('点击刷新按钮');
+            const button = event.target.closest('button');
+            const originalText = button.innerHTML;
+            
+            log('禁用按钮，显示加载状态');
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-arrow-clockwise rotating"></i> 刷新中...';
+            
+            // 更新统计数据
+            updateStats();
+            
+            setTimeout(() => {
+                log('恢复按钮状态');
+                button.disabled = false;
+                button.innerHTML = originalText;
+                
+                // 显示刷新成功提示
+                showToast('数据已更新');
+                log('显示成功提示');
+            }, 1000);
+        }
+
+        // 显示提示消息
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast-message';
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                z-index: 9999;
+                animation: slideIn 0.3s ease-out;
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => {
+                    document.body.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        // 添加动画样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes rotate {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            .rotating {
+                display: inline-block;
+                animation: rotate 1s linear infinite;
+            }
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 页面加载时初始化
+        log('页面加载完成');
+        log('点击刷新按钮开始测试');
+    </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}告警记录 - 信息化运维监控系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">告警记录</h1>
+</div>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>监控目标</th>
+            <th>告警类型</th>
+            <th>告警信息</th>
+            <th>状态</th>
+            <th>时间</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for alert in alerts %}
+        <tr>
+            <td>{{ alert.id }}</td>
+            <td>{{ alert.target_name }}</td>
+            <td>
+                <span class="badge bg-warning">{{ alert.alert_type }}</span>
+            </td>
+            <td>{{ alert.message }}</td>
+            <td>
+                {% if alert.status == 'pending' %}
+                <span class="badge bg-danger">待处理</span>
+                {% else %}
+                <span class="badge bg-success">已处理</span>
+                {% endif %}
+            </td>
+            <td>{{ alert.created_at | local_time }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

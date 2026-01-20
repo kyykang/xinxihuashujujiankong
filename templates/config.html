@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}系统配置 - 信息化运维监控系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">系统配置</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <form id="configForm">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>监控配置</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">检查间隔（秒）</label>
+                        <input type="number" class="form-control" name="check_interval" value="60">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">时区设置</label>
+                        <select class="form-select" name="timezone">
+                            <option value="Asia/Shanghai">中国标准时间 (UTC+8)</option>
+                            <option value="Asia/Tokyo">日本标准时间 (UTC+9)</option>
+                            <option value="Asia/Hong_Kong">香港时间 (UTC+8)</option>
+                            <option value="Asia/Singapore">新加坡时间 (UTC+8)</option>
+                            <option value="UTC">协调世界时 (UTC+0)</option>
+                            <option value="America/New_York">美国东部时间 (UTC-5)</option>
+                            <option value="America/Los_Angeles">美国西部时间 (UTC-8)</option>
+                            <option value="Europe/London">英国时间 (UTC+0)</option>
+                        </select>
+                        <small class="form-text text-muted">设置系统显示的时区</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>告警阈值</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">CPU使用率阈值（%）</label>
+                        <input type="number" class="form-control" name="cpu_threshold" value="80">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">内存使用率阈值（%）</label>
+                        <input type="number" class="form-control" name="memory_threshold" value="80">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">磁盘使用率阈值（%）</label>
+                        <input type="number" class="form-control" name="disk_threshold" value="80">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">存储使用率阈值（%）</label>
+                        <input type="number" class="form-control" name="storage_threshold" value="80">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>企业微信配置</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Webhook地址</label>
+                        <input type="url" class="form-control" name="wechat_webhook" 
+                               placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+                        <div class="form-text">
+                            在企业微信群聊中添加机器人，获取Webhook地址
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadConfig() {
+    fetch('/api/config')
+    .then(response => response.json())
+    .then(config => {
+        const form = document.getElementById('configForm');
+        for (let key in config) {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (input) {
+                input.value = config[key];
+            }
+        }
+    });
+}
+
+function saveConfig() {
+    const form = document.getElementById('configForm');
+    const formData = new FormData(form);
+    const config = {};
+    
+    for (let [key, value] of formData.entries()) {
+        config[key] = value;
+    }
+    
+    fetch('/api/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(config)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('配置保存成功！');
+        }
+    });
+}
+
+loadConfig();
+</script>
+{% endblock %}

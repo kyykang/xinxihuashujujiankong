@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="py-5 text-center">
+    <h1 class="display-4">信息化运维监控系统</h1>
+    <p class="lead">实时监控服务器、应用、数据库和业务指标</p>
+    <div class="mt-4">
+        <a href="/dashboard" class="btn btn-primary btn-lg">进入监控仪表板</a>
+        <a href="/targets" class="btn btn-outline-secondary btn-lg">管理监控目标</a>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-server" style="font-size: 3rem; color: #007bff;"></i>
+                <h5 class="card-title mt-3">服务器监控</h5>
+                <p class="card-text">CPU、内存、磁盘、网络IO实时监控</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-globe" style="font-size: 3rem; color: #28a745;"></i>
+                <h5 class="card-title mt-3">应用监控</h5>
+                <p class="card-text">HTTP/HTTPS服务健康检查</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-database" style="font-size: 3rem; color: #ffc107;"></i>
+                <h5 class="card-title mt-3">数据库监控</h5>
+                <p class="card-text">MySQL连接状态监控</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

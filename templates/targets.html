@@ -1,0 +1,747 @@
+{% extends "base.html" %}
+
+{% block title %}监控目标 - 信息化运维监控系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">监控目标管理</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTargetModal">
+        <i class="bi bi-plus-circle"></i> 添加监控目标
+    </button>
+</div>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>名称</th>
+            <th>类型</th>
+            <th>状态</th>
+            <th>创建时间</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="targetsTable">
+        {% for target in targets %}
+        <tr>
+            <td>{{ target.id }}</td>
+            <td>{{ target.name }}</td>
+            <td>
+                {% if target.type == 'server' %}服务器
+                {% elif target.type == 'storage' %}存储
+                {% elif target.type == 'application' %}应用
+                {% elif target.type == 'database' %}数据库
+                {% elif target.type == 'business' %}业务指标
+                {% endif %}
+            </td>
+            <td>
+                {% if target.enabled %}
+                <span class="badge bg-success">启用</span>
+                {% else %}
+                <span class="badge bg-secondary">禁用</span>
+                {% endif %}
+            </td>
+            <td>{{ target.created_at | local_time }}</td>
+            <td>
+                <a href="/monitor/{{ target.id }}" class="btn btn-sm btn-info">详情</a>
+                <button class="btn btn-sm btn-warning edit-btn" data-target-id="{{ target.id }}">编辑</button>
+                <button class="btn btn-sm btn-danger delete-btn" data-target-id="{{ target.id }}">删除</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- 添加监控目标模态框 -->
+<div class="modal fade" id="addTargetModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加监控目标</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addTargetForm">
+                    <div class="mb-3">
+                        <label class="form-label">名称</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">类型</label>
+                        <select class="form-select" name="type" id="targetType" required>
+                            <option value="server">服务器监控</option>
+                            <option value="storage">存储监控</option>
+                            <option value="application">应用监控</option>
+                            <option value="database">数据库监控</option>
+                            <option value="business">业务指标监控</option>
+                        </select>
+                    </div>
+                    <div id="configFields"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-info" onclick="testConnection('add')">
+                    <i class="bi bi-plug"></i> 测试连接
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveTarget()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑监控目标模态框 -->
+<div class="modal fade" id="editTargetModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑监控目标</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editTargetForm">
+                    <input type="hidden" id="editTargetId" name="id">
+                    <div class="mb-3">
+                        <label class="form-label">名称</label>
+                        <input type="text" class="form-control" id="editName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">类型</label>
+                        <select class="form-select" name="type" id="editTargetType" required>
+                            <option value="server">服务器监控</option>
+                            <option value="storage">存储监控</option>
+                            <option value="application">应用监控</option>
+                            <option value="database">数据库监控</option>
+                            <option value="business">业务指标监控</option>
+                        </select>
+                    </div>
+                    <div id="editConfigFields"></div>
+                    <div class="mb-3">
+                        <label class="form-label">状态</label>
+                        <select class="form-select" id="editEnabled" name="enabled">
+                            <option value="1">启用</option>
+                            <option value="0">禁用</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-info" onclick="testConnection('edit')">
+                    <i class="bi bi-plug"></i> 测试连接
+                </button>
+                <button type="button" class="btn btn-primary" onclick="updateTarget()">保存修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const configTemplates = {
+    server: `
+        <div class="mb-3">
+            <label class="form-label">服务器类型</label>
+            <select class="form-select" name="is_remote" id="serverType" onchange="toggleServerConfig()">
+                <option value="false">本地服务器</option>
+                <option value="true">远程服务器</option>
+            </select>
+        </div>
+        <div id="remoteServerConfig" style="display:none;">
+            <div class="mb-3">
+                <label class="form-label">服务器地址</label>
+                <input type="text" class="form-control" name="host" placeholder="192.168.1.100">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">SSH端口</label>
+                <input type="number" class="form-control" name="port" value="22">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input type="text" class="form-control" name="username" placeholder="root">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">认证方式</label>
+                <select class="form-select" name="auth_type" id="authType" onchange="toggleAuthMethod()">
+                    <option value="password">密码</option>
+                    <option value="key">SSH密钥</option>
+                </select>
+            </div>
+            <div id="passwordAuth" class="mb-3">
+                <label class="form-label">密码</label>
+                <input type="password" class="form-control" name="password">
+            </div>
+            <div id="keyAuth" class="mb-3" style="display:none;">
+                <label class="form-label">SSH密钥文件路径</label>
+                <input type="text" class="form-control" name="key_file" placeholder="/path/to/private_key">
+                <small class="form-text text-muted">服务器上的密钥文件绝对路径</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">磁盘路径（可选）</label>
+                <input type="text" class="form-control" name="disk_path" value="/" placeholder="/">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">进程名称（可选）</label>
+                <input type="text" class="form-control" name="process_name" placeholder="nginx">
+                <small class="form-text text-muted">监控特定进程是否运行</small>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">监控项</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="monitor_cpu" checked>
+                <label class="form-check-label">CPU</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="monitor_memory" checked>
+                <label class="form-check-label">内存</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="monitor_disk" checked>
+                <label class="form-check-label">磁盘</label>
+            </div>
+        </div>
+    `,
+    storage: `
+        <div class="mb-3">
+            <label class="form-label">存储路径</label>
+            <input type="text" class="form-control" name="path" value="/" required>
+        </div>
+    `,
+    application: `
+        <div class="mb-3">
+            <label class="form-label">URL地址</label>
+            <input type="url" class="form-control" name="url" placeholder="http://example.com" required>
+        </div>
+    `,
+    database: `
+        <div class="mb-3">
+            <label class="form-label">主机地址</label>
+            <input type="text" class="form-control" name="host" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">端口</label>
+            <input type="number" class="form-control" name="port" value="3306" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="user" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">数据库名</label>
+            <input type="text" class="form-control" name="database">
+        </div>
+    `,
+    business: `
+        <div class="mb-3">
+            <label class="form-label">数据库类型</label>
+            <select class="form-select" name="db_type" required>
+                <option value="mysql">MySQL</option>
+                <option value="sqlserver">SQL Server</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">主机地址</label>
+            <input type="text" class="form-control" name="host" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">端口</label>
+            <input type="number" class="form-control" name="port" value="3306" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="user" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">数据库名</label>
+            <input type="text" class="form-control" name="database" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">查询SQL</label>
+            <textarea class="form-control" name="query" rows="3" required></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">告警阈值</label>
+            <input type="number" class="form-control" name="threshold">
+        </div>
+    `
+};
+
+// 编辑模态框的配置模板（使用不同的ID）
+const editConfigTemplates = {
+    server: `
+        <div class="mb-3">
+            <label class="form-label">服务器类型</label>
+            <select class="form-select" name="is_remote" onchange="toggleEditServerConfig()">
+                <option value="false">本地服务器</option>
+                <option value="true">远程服务器</option>
+            </select>
+        </div>
+        <div id="editRemoteServerConfig" style="display:none;">
+            <div class="mb-3">
+                <label class="form-label">服务器地址</label>
+                <input type="text" class="form-control" name="host" placeholder="192.168.1.100">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">SSH端口</label>
+                <input type="number" class="form-control" name="port" value="22">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input type="text" class="form-control" name="username" placeholder="root">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">认证方式</label>
+                <select class="form-select" name="auth_type" onchange="toggleEditAuthMethod()">
+                    <option value="password">密码</option>
+                    <option value="key">SSH密钥</option>
+                </select>
+            </div>
+            <div id="editPasswordAuth" class="mb-3">
+                <label class="form-label">密码</label>
+                <input type="password" class="form-control" name="password" placeholder="留空则不修改">
+            </div>
+            <div id="editKeyAuth" class="mb-3" style="display:none;">
+                <label class="form-label">SSH密钥文件路径</label>
+                <input type="text" class="form-control" name="key_file" placeholder="/path/to/private_key">
+                <small class="form-text text-muted">服务器上的密钥文件绝对路径</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">磁盘路径（可选）</label>
+                <input type="text" class="form-control" name="disk_path" value="/" placeholder="/">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">进程名称（可选）</label>
+                <input type="text" class="form-control" name="process_name" placeholder="nginx">
+                <small class="form-text text-muted">监控特定进程是否运行</small>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">监控项</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="monitor_cpu">
+                <label class="form-check-label">CPU</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="monitor_memory">
+                <label class="form-check-label">内存</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="monitor_disk">
+                <label class="form-check-label">磁盘</label>
+            </div>
+        </div>
+    `,
+    storage: `
+        <div class="mb-3">
+            <label class="form-label">存储路径</label>
+            <input type="text" class="form-control" name="path" value="/" required>
+        </div>
+    `,
+    application: `
+        <div class="mb-3">
+            <label class="form-label">URL地址</label>
+            <input type="url" class="form-control" name="url" placeholder="http://example.com" required>
+        </div>
+    `,
+    database: `
+        <div class="mb-3">
+            <label class="form-label">主机地址</label>
+            <input type="text" class="form-control" name="host" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">端口</label>
+            <input type="number" class="form-control" name="port" value="3306" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="user" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password" placeholder="留空则不修改">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">数据库名</label>
+            <input type="text" class="form-control" name="database">
+        </div>
+    `,
+    business: `
+        <div class="mb-3">
+            <label class="form-label">数据库类型</label>
+            <select class="form-select" name="db_type" required>
+                <option value="mysql">MySQL</option>
+                <option value="sqlserver">SQL Server</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">主机地址</label>
+            <input type="text" class="form-control" name="host" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">端口</label>
+            <input type="number" class="form-control" name="port" value="3306" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="user" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password" placeholder="留空则不修改">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">数据库名</label>
+            <input type="text" class="form-control" name="database" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">查询SQL</label>
+            <textarea class="form-control" name="query" rows="3" required></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">告警阈值</label>
+            <input type="number" class="form-control" name="threshold">
+        </div>
+    `
+};
+
+document.getElementById('targetType').addEventListener('change', function() {
+    const type = this.value;
+    document.getElementById('configFields').innerHTML = configTemplates[type];
+});
+
+document.getElementById('targetType').dispatchEvent(new Event('change'));
+
+document.getElementById('editTargetType').addEventListener('change', function() {
+    const type = this.value;
+    document.getElementById('editConfigFields').innerHTML = editConfigTemplates[type];
+});
+
+function toggleServerConfig() {
+    const isRemote = document.getElementById('serverType').value === 'true';
+    document.getElementById('remoteServerConfig').style.display = isRemote ? 'block' : 'none';
+}
+
+function toggleAuthMethod() {
+    const authType = document.getElementById('authType').value;
+    document.getElementById('passwordAuth').style.display = authType === 'password' ? 'block' : 'none';
+    document.getElementById('keyAuth').style.display = authType === 'key' ? 'block' : 'none';
+}
+
+function toggleEditServerConfig() {
+    const serverTypeSelect = document.querySelector('#editConfigFields select[name="is_remote"]');
+    if (serverTypeSelect) {
+        const isRemote = serverTypeSelect.value === 'true';
+        const remoteConfig = document.getElementById('editRemoteServerConfig');
+        if (remoteConfig) {
+            remoteConfig.style.display = isRemote ? 'block' : 'none';
+        }
+    }
+}
+
+function toggleEditAuthMethod() {
+    const authTypeSelect = document.querySelector('#editConfigFields select[name="auth_type"]');
+    if (authTypeSelect) {
+        const authType = authTypeSelect.value;
+        const passwordAuth = document.getElementById('editPasswordAuth');
+        const keyAuth = document.getElementById('editKeyAuth');
+        if (passwordAuth) passwordAuth.style.display = authType === 'password' ? 'block' : 'none';
+        if (keyAuth) keyAuth.style.display = authType === 'key' ? 'block' : 'none';
+    }
+}
+
+function saveTarget() {
+    const form = document.getElementById('addTargetForm');
+    const formData = new FormData(form);
+    
+    const data = {
+        name: formData.get('name'),
+        type: formData.get('type'),
+        enabled: 1,
+        config: {}
+    };
+    
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'name' && key !== 'type') {
+            // 转换布尔值
+            if (key === 'is_remote') {
+                data.config[key] = value === 'true';
+            } else if (key === 'port') {
+                data.config[key] = parseInt(value);
+            } else {
+                data.config[key] = value;
+            }
+        }
+    }
+    
+    fetch('/api/targets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('保存失败: ' + (result.error || '未知错误'));
+        }
+    });
+}
+
+function editTarget(id) {
+    fetch(`/api/targets/${id}`)
+    .then(response => response.json())
+    .then(target => {
+        if (!target.id) {
+            alert('监控目标不存在');
+            return;
+        }
+        
+        // 填充基本信息
+        document.getElementById('editTargetId').value = target.id;
+        document.getElementById('editName').value = target.name;
+        document.getElementById('editTargetType').value = target.type;
+        document.getElementById('editEnabled').value = target.enabled;
+        
+        // 触发类型变化，生成配置字段
+        document.getElementById('editTargetType').dispatchEvent(new Event('change'));
+        
+        // 等待DOM更新后填充配置数据
+        setTimeout(() => {
+            const config = JSON.parse(target.config);
+            const form = document.getElementById('editTargetForm');
+            
+            // 填充所有配置字段
+            for (let key in config) {
+                const input = form.querySelector(`[name="${key}"]`);
+                if (input) {
+                    if (input.type === 'checkbox') {
+                        input.checked = config[key];
+                    } else if (key === 'is_remote') {
+                        input.value = config[key] ? 'true' : 'false';
+                        // 触发服务器类型变化
+                        setTimeout(() => {
+                            const serverTypeSelect = document.querySelector('#editConfigFields select[name="is_remote"]');
+                            if (serverTypeSelect) {
+                                serverTypeSelect.addEventListener('change', toggleEditServerConfig);
+                                toggleEditServerConfig();
+                            }
+                        }, 100);
+                    } else {
+                        input.value = config[key];
+                    }
+                }
+            }
+            
+            // 处理认证方式切换
+            const authTypeSelect = document.querySelector('#editConfigFields select[name="auth_type"]');
+            if (authTypeSelect) {
+                authTypeSelect.addEventListener('change', toggleEditAuthMethod);
+                toggleEditAuthMethod();
+            }
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('editTargetModal'));
+            modal.show();
+        }, 100);
+    })
+    .catch(error => {
+        alert('加载失败: ' + error);
+    });
+}
+
+function updateTarget() {
+    const form = document.getElementById('editTargetForm');
+    const formData = new FormData(form);
+    const targetId = document.getElementById('editTargetId').value;
+    
+    const data = {
+        name: formData.get('name'),
+        type: formData.get('type'),
+        enabled: parseInt(formData.get('enabled')),
+        config: {}
+    };
+    
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'name' && key !== 'type' && key !== 'enabled' && key !== 'id') {
+            // 跳过空密码字段
+            if (key === 'password' && (!value || value.trim() === '')) {
+                continue;
+            }
+            
+            // 转换布尔值
+            if (key === 'is_remote') {
+                data.config[key] = value === 'true';
+            } else if (key === 'port' || key === 'threshold') {
+                data.config[key] = parseInt(value) || 0;
+            } else {
+                data.config[key] = value;
+            }
+        }
+    }
+    
+    fetch(`/api/targets/${targetId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('更新失败: ' + (result.error || '未知错误'));
+        }
+    })
+    .catch(error => {
+        alert('更新失败: ' + error);
+    });
+}
+
+function deleteTarget(id) {
+    if (confirm('确定要删除这个监控目标吗？')) {
+        fetch(`/api/targets/${id}`, {method: 'DELETE'})
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                location.reload();
+            }
+        });
+    }
+}
+
+function viewTarget(id) {
+    fetch(`/api/monitor-data/${id}`)
+    .then(response => response.json())
+    .then(data => {
+        alert('监控数据：' + JSON.stringify(data.slice(0, 3), null, 2));
+    });
+}
+
+// 页面加载完成后的初始化
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('页面加载完成');
+    
+    // 检查 Bootstrap 是否加载
+    if (typeof bootstrap === 'undefined') {
+        console.error('Bootstrap 未加载！');
+        alert('警告：Bootstrap 未正确加载，模态框可能无法工作。请刷新页面或检查网络连接。');
+    } else {
+        console.log('Bootstrap 已加载');
+    }
+    
+    // 检查模态框元素
+    const addModal = document.getElementById('addTargetModal');
+    const editModal = document.getElementById('editTargetModal');
+    
+    if (addModal) {
+        console.log('添加模态框元素存在');
+    } else {
+        console.error('添加模态框元素不存在！');
+    }
+    
+    if (editModal) {
+        console.log('编辑模态框元素存在');
+    } else {
+        console.error('编辑模态框元素不存在！');
+    }
+    
+    // 绑定编辑按钮事件
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target-id');
+            console.log('点击编辑按钮，目标ID:', targetId);
+            editTarget(targetId);
+        });
+    });
+    
+    // 绑定删除按钮事件
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target-id');
+            console.log('点击删除按钮，目标ID:', targetId);
+            deleteTarget(targetId);
+        });
+    });
+});
+
+// 测试连接
+function testConnection(mode) {
+    const formId = mode === 'add' ? 'addTargetForm' : 'editTargetForm';
+    const form = document.getElementById(formId);
+    const formData = new FormData(form);
+    
+    const data = {
+        type: formData.get('type'),
+        config: {}
+    };
+    
+    // 收集配置数据
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'name' && key !== 'type' && key !== 'enabled' && key !== 'id') {
+            // 跳过空密码字段（仅编辑模式）
+            if (mode === 'edit' && key === 'password' && (!value || value.trim() === '')) {
+                continue;
+            }
+            
+            // 转换数据类型
+            if (key === 'is_remote') {
+                data.config[key] = value === 'true';
+            } else if (key === 'port' || key === 'threshold') {
+                data.config[key] = parseInt(value) || 0;
+            } else {
+                data.config[key] = value;
+            }
+        }
+    }
+    
+    // 显示加载状态
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 测试中...';
+    
+    // 发送测试请求
+    fetch('/api/test-connection', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        button.disabled = false;
+        button.innerHTML = originalText;
+        
+        if (result.success) {
+            let message = `✓ ${result.message}\n\n`;
+            
+            if (result.details) {
+                message += '详细信息：\n';
+                for (let key in result.details) {
+                    message += `  ${key}: ${result.details[key]}\n`;
+                }
+            }
+            
+            alert(message);
+        } else {
+            alert(`✗ ${result.message}`);
+        }
+    })
+    .catch(error => {
+        button.disabled = false;
+        button.innerHTML = originalText;
+        alert(`测试失败: ${error}`);
+    });
+}
+</script>
+{% endblock %}

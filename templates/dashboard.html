@@ -1,0 +1,516 @@
+{% extends "base.html" %}
+
+{% block title %}监控仪表板 - 信息化运维监控系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <div>
+        <h1 class="h2">监控仪表板</h1>
+        <small class="text-muted">
+            <i class="bi bi-info-circle"></i> 
+            数据每30秒自动更新，点击刷新按钮可立即更新统计数据
+        </small>
+    </div>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button class="btn btn-sm btn-outline-secondary" id="refreshBtn" title="刷新统计数据">
+            <i class="bi bi-arrow-clockwise"></i> 刷新
+        </button>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">监控目标</h6>
+                        <h2 class="mt-2 mb-0">{{ total_targets }}</h2>
+                    </div>
+                    <i class="bi bi-bullseye" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">近1小时告警</h6>
+                        <h2 class="mt-2 mb-0">{{ error_count }}</h2>
+                    </div>
+                    <i class="bi bi-exclamation-triangle" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">在线服务</h6>
+                        <h2 class="mt-2 mb-0" id="onlineCount">-</h2>
+                    </div>
+                    <i class="bi bi-check-circle" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">离线/异常</h6>
+                        <h2 class="mt-2 mb-0" id="offlineCount">-</h2>
+                    </div>
+                    <i class="bi bi-x-circle" style="font-size: 2.5rem; opacity: 0.5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 服务器监控图表 -->
+<div class="row mb-4">
+    {% for target in targets %}
+    {% if target.type == 'server' and target.latest_data %}
+    <div class="col-md-6 mb-3">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-server"></i> {{ target.name }}
+                </h5>
+                <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
+                    {{ '正常' if target.latest_data.status == 'normal' else '异常' }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div style="position: relative; height: 200px;">
+                    <canvas id="chart-{{ target.id }}"></canvas>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">最后更新: {{ target.latest_data.created_at | local_time }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- 应用和数据库状态 -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-globe"></i> 应用监控</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group" id="applicationList">
+                    {% if targets|selectattr('type', 'equalto', 'application')|list|length == 0 %}
+                    <div class="list-group-item text-muted text-center">暂无应用监控</div>
+                    {% else %}
+                    {% for target in targets %}
+                    {% if target.type == 'application' %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ target.name }}</strong>
+                            {% if target.latest_data %}
+                            <br><small class="text-muted">{{ target.latest_data.created_at | local_time }}</small>
+                            {% endif %}
+                        </div>
+                        {% if target.latest_data %}
+                        <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ '在线' if target.latest_data.status == 'normal' else '离线' }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary">未知</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-database"></i> 数据库监控</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group" id="databaseList">
+                    {% if targets|selectattr('type', 'equalto', 'database')|list|length == 0 %}
+                    <div class="list-group-item text-muted text-center">暂无数据库监控</div>
+                    {% else %}
+                    {% for target in targets %}
+                    {% if target.type == 'database' %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ target.name }}</strong>
+                            {% if target.latest_data %}
+                            <br><small class="text-muted">{{ target.latest_data.created_at | local_time }}</small>
+                            {% endif %}
+                        </div>
+                        {% if target.latest_data %}
+                        <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ '在线' if target.latest_data.status == 'normal' else '离线' }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary">未知</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 存储图表实例
+const charts = {};
+
+// 初始化服务器监控图表
+function initServerCharts() {
+    {% for target in targets %}
+    {% if target.type == 'server' and target.latest_data %}
+    try {
+        const metricValue = '{{ target.latest_data.metric_value | safe }}';
+        console.log('初始化图表 {{ target.id }}，数据:', metricValue);
+        
+        const data{{ target.id }} = JSON.parse(metricValue);
+        
+        const ctx{{ target.id }} = document.getElementById('chart-{{ target.id }}');
+        if (ctx{{ target.id }}) {
+            charts[{{ target.id }}] = new Chart(ctx{{ target.id }}, {
+                type: 'bar',
+                data: {
+                    labels: ['CPU', '内存', '磁盘'],
+                    datasets: [{
+                        label: '使用率 (%)',
+                        data: [
+                            data{{ target.id }}.cpu || 0,
+                            data{{ target.id }}.memory || 0,
+                            data{{ target.id }}.disk || 0
+                        ],
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(255, 99, 132, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(255, 99, 132, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y.toFixed(2) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('图表 {{ target.id }} 初始化成功');
+        } else {
+            console.error('找不到canvas元素: chart-{{ target.id }}');
+        }
+    } catch (e) {
+        console.error('初始化图表失败 ({{ target.id }}):', e);
+    }
+    {% endif %}
+    {% endfor %}
+}
+
+// 更新统计数据
+function updateStats() {
+    fetch('/api/dashboard-stats')
+        .then(response => response.json())
+        .then(data => {
+            // 更新统计数字
+            document.getElementById('onlineCount').textContent = data.summary.online;
+            document.getElementById('offlineCount').textContent = data.summary.offline + data.summary.warning;
+            
+            // 更新服务器图表
+            data.servers.forEach(server => {
+                if (charts[server.id]) {
+                    try {
+                        const metrics = typeof server.data === 'string' ? JSON.parse(server.data) : server.data;
+                        charts[server.id].data.datasets[0].data = [
+                            metrics.cpu || 0,
+                            metrics.memory || 0,
+                            metrics.disk || 0
+                        ];
+                        charts[server.id].update();
+                    } catch (e) {
+                        console.error('更新图表失败:', e);
+                    }
+                }
+            });
+            
+            // 更新应用列表
+            updateApplicationList(data.applications);
+            
+            // 更新数据库列表
+            updateDatabaseList(data.databases);
+        })
+        .catch(error => console.error('更新统计失败:', error));
+}
+
+// 更新应用列表
+function updateApplicationList(applications) {
+    const listElement = document.getElementById('applicationList');
+    if (!listElement) return;
+    
+    if (applications.length === 0) {
+        listElement.innerHTML = '<div class="list-group-item text-muted text-center">暂无应用监控</div>';
+        return;
+    }
+    
+    listElement.innerHTML = '';
+    applications.forEach(app => {
+        const statusClass = app.status === 'normal' ? 'bg-success' : 'bg-danger';
+        const statusText = app.status === 'normal' ? '在线' : '离线';
+        
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <div>
+                <strong>${app.name}</strong>
+                <br><small class="text-muted">${app.time}</small>
+            </div>
+            <span class="badge ${statusClass}">${statusText}</span>
+        `;
+        listElement.appendChild(item);
+    });
+}
+
+// 更新数据库列表
+function updateDatabaseList(databases) {
+    const listElement = document.getElementById('databaseList');
+    if (!listElement) return;
+    
+    if (databases.length === 0) {
+        listElement.innerHTML = '<div class="list-group-item text-muted text-center">暂无数据库监控</div>';
+        return;
+    }
+    
+    listElement.innerHTML = '';
+    databases.forEach(db => {
+        const statusClass = db.status === 'normal' ? 'bg-success' : 'bg-danger';
+        const statusText = db.status === 'normal' ? '在线' : '离线';
+        
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <div>
+                <strong>${db.name}</strong>
+                <br><small class="text-muted">${db.time}</small>
+            </div>
+            <span class="badge ${statusClass}">${statusText}</span>
+        `;
+        listElement.appendChild(item);
+    });
+}
+
+// 刷新仪表板（局部刷新，不重载整个页面）
+function refreshDashboard() {
+    const button = document.getElementById('refreshBtn');
+    if (!button) {
+        console.error('刷新按钮未找到');
+        return;
+    }
+    
+    const originalText = button.innerHTML;
+    
+    // 显示加载状态
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-arrow-clockwise rotating"></i> 刷新中...';
+    
+    console.log('开始刷新数据...');
+    
+    // 更新统计数据
+    fetch('/api/dashboard-stats')
+        .then(response => response.json())
+        .then(data => {
+            console.log('收到数据:', data);
+            
+            // 更新统计数字
+            document.getElementById('onlineCount').textContent = data.summary.online;
+            document.getElementById('offlineCount').textContent = data.summary.offline + data.summary.warning;
+            
+            // 更新服务器图表
+            console.log('更新服务器图表，数量:', data.servers.length);
+            data.servers.forEach(server => {
+                console.log('处理服务器:', server.id, '数据:', server.data);
+                if (charts[server.id]) {
+                    try {
+                        // 数据可能已经是对象，也可能是字符串
+                        let metrics;
+                        if (typeof server.data === 'string') {
+                            metrics = JSON.parse(server.data);
+                        } else {
+                            metrics = server.data;
+                        }
+                        
+                        console.log('解析后的指标:', metrics);
+                        
+                        charts[server.id].data.datasets[0].data = [
+                            metrics.cpu || 0,
+                            metrics.memory || 0,
+                            metrics.disk || 0
+                        ];
+                        charts[server.id].update();
+                        console.log('图表', server.id, '更新成功');
+                    } catch (e) {
+                        console.error('更新图表失败:', server.id, e);
+                    }
+                } else {
+                    console.warn('图表不存在:', server.id);
+                }
+            });
+            
+            // 更新应用列表
+            updateApplicationList(data.applications);
+            
+            // 更新数据库列表
+            updateDatabaseList(data.databases);
+            
+            // 恢复按钮状态
+            button.disabled = false;
+            button.innerHTML = originalText;
+            
+            // 显示刷新成功提示
+            showToast('数据已更新');
+        })
+        .catch(error => {
+            console.error('刷新失败:', error);
+            button.disabled = false;
+            button.innerHTML = originalText;
+            showToast('刷新失败，请重试', 'error');
+        });
+}
+
+// 显示提示消息
+function showToast(message, type = 'success') {
+    // 创建提示元素
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.textContent = message;
+    
+    const bgColor = type === 'success' ? '#28a745' : '#dc3545';
+    toast.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: ${bgColor};
+        color: white;
+        padding: 12px 24px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        z-index: 9999;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 3秒后移除
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// 添加动画样式
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .rotating {
+        display: inline-block;
+        animation: rotate 1s linear infinite;
+    }
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('仪表板页面加载完成');
+    
+    initServerCharts();
+    updateStats();
+    
+    // 绑定刷新按钮事件
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        console.log('刷新按钮找到，绑定事件');
+        refreshBtn.addEventListener('click', refreshDashboard);
+    } else {
+        console.error('刷新按钮未找到');
+    }
+    
+    // 每30秒自动刷新统计数据
+    setInterval(updateStats, 30000);
+});
+</script>
+{% endblock %}

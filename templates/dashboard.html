@@ -229,18 +229,6 @@
                                 {% if target.latest_data %}
                                 {% set metric_data = target.latest_data.metric_value | from_json %}
                                 
-                                <!-- 显示主要指标值 -->
-                                <div class="mb-3">
-                                    <h3 class="mb-0 {% if metric_data.alert %}text-warning{% endif %}">
-                                        {{ metric_data.value }}
-                                    </h3>
-                                    <small class="text-muted">
-                                        {% if metric_data.row_count %}
-                                        共 {{ metric_data.row_count }} 条记录
-                                        {% endif %}
-                                    </small>
-                                </div>
-                                
                                 <!-- 显示所有数据 -->
                                 {% if metric_data.all_data and metric_data.all_data|length > 0 %}
                                 <div class="{% if metric_data.alert %}alert alert-warning{% else %}border rounded p-2{% endif %} mb-0">
@@ -249,6 +237,7 @@
                                     {% else %}
                                     <strong>查询结果（前5条）：</strong>
                                     {% endif %}
+                                    <small class="text-muted ms-2">共 {{ metric_data.row_count }} 条记录</small>
                                     <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
                                         {% for row in metric_data.all_data[:5] %}
                                         <div class="mb-1">
@@ -562,10 +551,11 @@ function updateBusinessMetricsList(business) {
                 console.log('显示数据，条数:', dataToShow.length);
                 const alertClass = metricData.alert ? 'alert alert-warning' : 'border rounded p-2';
                 const title = metricData.alert ? '异常记录（前5条）：' : '查询结果（前5条）：';
+                const recordCount = metricData.row_count ? `<small class="text-muted ms-2">共 ${metricData.row_count} 条记录</small>` : '';
                 
                 detailHtml = `
                     <div class="${alertClass} mb-0">
-                        <strong>${title}</strong>
+                        <strong>${title}</strong>${recordCount}
                         <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
                 `;
                 
@@ -589,12 +579,6 @@ function updateBusinessMetricsList(business) {
                         <span class="badge bg-${statusClass}">${statusText}</span>
                     </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <h3 class="mb-0 ${metricData.alert ? 'text-warning' : ''}">${metricData.value || 0}</h3>
-                            <small class="text-muted">
-                                ${metricData.row_count ? `共 ${metricData.row_count} 条记录` : ''}
-                            </small>
-                        </div>
                         ${detailHtml}
                         <div class="mt-2">
                             <small class="text-muted">

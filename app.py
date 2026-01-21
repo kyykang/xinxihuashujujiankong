@@ -199,29 +199,37 @@ def api_test_connection():
         
         elif target_type == 'database':
             # 测试数据库连接
-            import pymysql
+            from monitors import DatabaseMonitor
             
-            conn = pymysql.connect(
-                host=config.get('host'),
-                port=int(config.get('port', 3306)),
-                user=config.get('user'),
-                password=config.get('password'),
-                database=config.get('database', ''),
-                connect_timeout=10
-            )
+            db_type = config.get('db_type', 'mysql').lower()
             
-            cursor = conn.cursor()
-            cursor.execute('SELECT VERSION()')
-            version = cursor.fetchone()[0]
-            conn.close()
+            if db_type == 'sqlserver':
+                result = DatabaseMonitor.check_sqlserver(
+                    host=config.get('host'),
+                    port=int(config.get('port', 1433)),
+                    user=config.get('user'),
+                    password=config.get('password'),
+                    database=config.get('database', '')
+                )
+            else:  # mysql
+                result = DatabaseMonitor.check_mysql(
+                    host=config.get('host'),
+                    port=int(config.get('port', 3306)),
+                    user=config.get('user'),
+                    password=config.get('password'),
+                    database=config.get('database', '')
+                )
             
-            return jsonify({
-                'success': True,
-                'message': '数据库连接成功！',
-                'details': {
-                    'version': version
-                }
-            })
+            if result['status'] == 'online':
+                return jsonify({
+                    'success': True,
+                    'message': f'{db_type.upper()} 数据库连接成功！'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': f'连接失败: {result.get("error", "未知错误")}'
+                })
         
         elif target_type == 'storage':
             # 测试存储路径
@@ -250,29 +258,51 @@ def api_test_connection():
         
         elif target_type == 'business':
             # 测试业务指标查询
-            import pymysql
+            from monitors import DatabaseMonitor
             
-            conn = pymysql.connect(
-                host=config.get('host'),
-                port=int(config.get('port', 3306)),
-                user=config.get('user'),
-                password=config.get('password'),
-                database=config.get('database'),
-                connect_timeout=10
-            )
+            db_type = config.get('db_type', 'mysql').lower()
+            query = config.get('query')
             
-            cursor = conn.cursor()
-            cursor.execute(config.get('query'))
-            result = cursor.fetchone()
-            conn.close()
+            if not query:
+                return jsonify({
+                    'success': False,
+                    'message': 'SQL 查询语句不能为空'
+                })
             
-            return jsonify({
-                'success': True,
-                'message': 'SQL 查询执行成功！',
-                'details': {
-                    'result': str(result[0]) if result else 'NULL'
-                }
-            })
+            if db_type == 'sqlserver':
+                result = DatabaseMonitor.query_sqlserver(
+                    host=config.get('host'),
+                    port=int(config.get('port', 1433)),
+                    user=config.get('user'),
+                    password=config.get('password'),
+                    database=config.get('database'),
+                    query=query
+                )
+            else:  # mysql
+                result = DatabaseMonitor.query_mysql(
+                    host=config.get('host'),
+                    port=int(config.get('port', 3306)),
+                    user=config.get('user'),
+                    password=config.get('password'),
+                    database=config.get('database'),
+                    query=query
+                )
+            
+            if result['status'] == 'success':
+                data = result['data']
+                return jsonify({
+                    'success': True,
+                    'message': 'SQL 查询执行成功！',
+                    'details': {
+                        'result': str(data[0][0]) if data and len(data) > 0 else 'NULL',
+                        'rows': len(data) if data else 0
+                    }
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': f'查询失败: {result.get("error", "未知错误")}'
+                })
         
         else:
             return jsonify({

@@ -203,13 +203,25 @@ def check_database(target_id, config):
     import time
     start_time = time.time()
     
-    result = DatabaseMonitor.check_mysql(
-        config['host'],
-        config['port'],
-        config['user'],
-        config['password'],
-        config.get('database', '')
-    )
+    # 获取数据库类型，默认为mysql
+    db_type = config.get('db_type', 'mysql').lower()
+    
+    if db_type == 'sqlserver':
+        result = DatabaseMonitor.check_sqlserver(
+            config['host'],
+            config['port'],
+            config['user'],
+            config['password'],
+            config.get('database', '')
+        )
+    else:  # mysql
+        result = DatabaseMonitor.check_mysql(
+            config['host'],
+            config['port'],
+            config['user'],
+            config['password'],
+            config.get('database', '')
+        )
     
     elapsed = time.time() - start_time
     result['execution_time'] = round(elapsed, 2)

@@ -222,12 +222,19 @@ const configTemplates = {
     `,
     database: `
         <div class="mb-3">
+            <label class="form-label">数据库类型</label>
+            <select class="form-select" name="db_type" id="dbType" onchange="updateDbPort()" required>
+                <option value="mysql">MySQL</option>
+                <option value="sqlserver">SQL Server</option>
+            </select>
+        </div>
+        <div class="mb-3">
             <label class="form-label">主机地址</label>
             <input type="text" class="form-control" name="host" required>
         </div>
         <div class="mb-3">
             <label class="form-label">端口</label>
-            <input type="number" class="form-control" name="port" value="3306" required>
+            <input type="number" class="form-control" name="port" id="dbPort" value="3306" required>
         </div>
         <div class="mb-3">
             <label class="form-label">用户名</label>
@@ -245,7 +252,7 @@ const configTemplates = {
     business: `
         <div class="mb-3">
             <label class="form-label">数据库类型</label>
-            <select class="form-select" name="db_type" required>
+            <select class="form-select" name="db_type" id="businessDbType" onchange="updateBusinessDbPort()" required>
                 <option value="mysql">MySQL</option>
                 <option value="sqlserver">SQL Server</option>
             </select>
@@ -256,7 +263,7 @@ const configTemplates = {
         </div>
         <div class="mb-3">
             <label class="form-label">端口</label>
-            <input type="number" class="form-control" name="port" value="3306" required>
+            <input type="number" class="form-control" name="port" id="businessDbPort" value="3306" required>
         </div>
         <div class="mb-3">
             <label class="form-label">用户名</label>
@@ -360,6 +367,13 @@ const editConfigTemplates = {
     `,
     database: `
         <div class="mb-3">
+            <label class="form-label">数据库类型</label>
+            <select class="form-select" name="db_type" onchange="updateEditDbPort()" required>
+                <option value="mysql">MySQL</option>
+                <option value="sqlserver">SQL Server</option>
+            </select>
+        </div>
+        <div class="mb-3">
             <label class="form-label">主机地址</label>
             <input type="text" class="form-control" name="host" required>
         </div>
@@ -383,7 +397,7 @@ const editConfigTemplates = {
     business: `
         <div class="mb-3">
             <label class="form-label">数据库类型</label>
-            <select class="form-select" name="db_type" required>
+            <select class="form-select" name="db_type" onchange="updateEditBusinessDbPort()" required>
                 <option value="mysql">MySQL</option>
                 <option value="sqlserver">SQL Server</option>
             </select>
@@ -461,6 +475,48 @@ function toggleEditAuthMethod() {
         const keyAuth = document.getElementById('editKeyAuth');
         if (passwordAuth) passwordAuth.style.display = authType === 'password' ? 'block' : 'none';
         if (keyAuth) keyAuth.style.display = authType === 'key' ? 'block' : 'none';
+    }
+}
+
+function updateDbPort() {
+    const dbType = document.getElementById('dbType');
+    const dbPort = document.getElementById('dbPort');
+    if (dbType && dbPort) {
+        // 只在端口为默认值时才自动更改
+        if (dbPort.value == '3306' || dbPort.value == '1433' || dbPort.value == '') {
+            dbPort.value = dbType.value === 'sqlserver' ? '1433' : '3306';
+        }
+    }
+}
+
+function updateEditDbPort() {
+    const dbType = document.querySelector('#editConfigFields select[name="db_type"]');
+    const dbPort = document.querySelector('#editConfigFields input[name="port"]');
+    if (dbType && dbPort) {
+        // 只在端口为默认值时才自动更改
+        if (dbPort.value == '3306' || dbPort.value == '1433' || dbPort.value == '') {
+            dbPort.value = dbType.value === 'sqlserver' ? '1433' : '3306';
+        }
+    }
+}
+
+function updateBusinessDbPort() {
+    const dbType = document.getElementById('businessDbType');
+    const dbPort = document.getElementById('businessDbPort');
+    if (dbType && dbPort) {
+        if (dbPort.value == '3306' || dbPort.value == '1433' || dbPort.value == '') {
+            dbPort.value = dbType.value === 'sqlserver' ? '1433' : '3306';
+        }
+    }
+}
+
+function updateEditBusinessDbPort() {
+    const dbType = document.querySelector('#editConfigFields select[name="db_type"]');
+    const dbPort = document.querySelector('#editConfigFields input[name="port"]');
+    if (dbType && dbPort) {
+        if (dbPort.value == '3306' || dbPort.value == '1433' || dbPort.value == '') {
+            dbPort.value = dbType.value === 'sqlserver' ? '1433' : '3306';
+        }
     }
 }
 

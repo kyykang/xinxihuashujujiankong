@@ -115,12 +115,52 @@ class DatabaseMonitor:
                 user=user,
                 password=password,
                 database=database,
-                connect_timeout=3
+                connect_timeout=10,  # 增加连接超时到10秒
+                read_timeout=10,     # 增加读取超时
+                write_timeout=10     # 增加写入超时
             )
+            # 执行一个简单的查询来确认连接
+            cursor = conn.cursor()
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+            cursor.close()
             conn.close()
             return {'status': 'online'}
         except Exception as e:
             return {'status': 'offline', 'error': str(e)}
+    
+    @staticmethod
+    def check_sqlserver(host, port, user, password, database=''):
+        """检查SQL Server数据库连接"""
+        try:
+            import pymssql
+            # 如果端口为空或0，使用默认端口1433
+            if not port or port == 0:
+                port = 1433
+            
+            conn = pymssql.connect(
+                server=host,
+                port=int(port),
+                user=user,
+                password=password,
+                database=database if database else 'master',
+                timeout=10,
+                login_timeout=10,
+                tds_version='7.0'  # 使用TDS 7.0协议，兼容性更好
+            )
+            # 执行一个简单的查询来确认连接
+            cursor = conn.cursor()
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+            cursor.close()
+            conn.close()
+            return {'status': 'online'}
+        except Exception as e:
+            error_msg = str(e)
+            # 提供更友好的错误提示
+            if '20002' in error_msg or 'connection failed' in error_msg.lower():
+                error_msg = f"无法连接到SQL Server ({host}:{port})。请检查：\n1. 服务器地址和端口是否正确\n2. SQL Server是否启用了TCP/IP协议\n3. 防火墙是否允许连接\n4. SQL Server是否允许远程连接"
+            return {'status': 'offline', 'error': error_msg}
     
     @staticmethod
     def query_mysql(host, port, user, password, database, query):
@@ -139,17 +179,58 @@ class DatabaseMonitor:
             return {'status': 'success', 'data': result}
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
+    
+    @staticmethod
+    def query_sqlserver(host, port, user, password, database, query):
+        """查询SQL Server数据库"""
+        try:
+            import pymssql
+            # 如果端口为空或0，使用默认端口1433
+            if not port or port == 0:
+                port = 1433
+            
+            conn = pymssql.connect(
+                server=host,
+                port=int(port),
+                user=user,
+                password=password,
+                database=database if database else 'master',
+                timeout=10,
+                login_timeout=10,
+                tds_version='7.0'  # 使用TDS 7.0协议，兼容性更好
+            )
+            cursor = conn.cursor()
+            cursor.execute(query)
+            result = cursor.fetchall()
+            conn.close()
+            return {'status': 'success', 'data': result}
+        except Exception as e:
+            error_msg = str(e)
+            # 提供更友好的错误提示
+            if '20002' in error_msg or 'connection failed' in error_msg.lower():
+                error_msg = f"无法连接到SQL Server ({host}:{port})。请检查：\n1. 服务器地址和端口是否正确（默认1433）\n2. SQL Server是否启用了TCP/IP协议\n3. 防火墙是否允许连接\n4. SQL Server是否允许远程连接"
+            return {'status': 'error', 'error': error_msg}
 
 class BusinessMonitor:
     """业务指标监控"""
     
     @staticmethod
     def check_business_metric(config):
-        db_type = config.get('db_type')
+        db_type = config.get('db_type', 'mysql').lower()
         query = config.get('query')
         threshold = config.get('threshold')
         
-        if db_type == 'mysql':
+        # 根据数据库类型选择查询方法
+        if db_type == 'sqlserver':
+            result = DatabaseMonitor.query_sqlserver(
+                config['host'],
+                config['port'],
+                config['user'],
+                config['password'],
+                config['database'],
+                query
+            )
+        elif db_type == 'mysql':
             result = DatabaseMonitor.query_mysql(
                 config['host'],
                 config['port'],
@@ -158,40 +239,43 @@ class BusinessMonitor:
                 config['database'],
                 query
             )
-            if result['status'] == 'success':
-                # 获取总行数
-                row_count = len(result['data']) if result['data'] else 0
-                
-                # 获取第一行第一列作为数值（用于显示和阈值比较）
-                value = result['data'][0][0] if result['data'] and len(result['data']) > 0 else 0
-                
-                # 保存所有查询结果（用于显示）
-                all_data = result['data'] if result['data'] else []
-                
-                # 判断是否需要告警
-                alert = False
-                if threshold is None or threshold == 0:
-                    # 阈值为0或未设置：只要有数据就告警（存在模式）
-                    alert = row_count > 0
+        else:
+            return {'status': 'error', 'error': f'不支持的数据库类型: {db_type}'}
+        
+        if result['status'] == 'success':
+            # 获取总行数
+            row_count = len(result['data']) if result['data'] else 0
+            
+            # 获取第一行第一列作为数值（用于显示和阈值比较）
+            value = result['data'][0][0] if result['data'] and len(result['data']) > 0 else 0
+            
+            # 保存所有查询结果（用于显示）
+            all_data = result['data'] if result['data'] else []
+            
+            # 判断是否需要告警
+            alert = False
+            if threshold is None or threshold == 0:
+                # 阈值为0或未设置：只要有数据就告警（存在模式）
+                alert = row_count > 0
+            else:
+                # 阈值大于0：当值超过阈值时告警（阈值模式）
+                if isinstance(value, (int, float)):
+                    alert = value > threshold
                 else:
-                    # 阈值大于0：当值超过阈值时告警（阈值模式）
-                    if isinstance(value, (int, float)):
-                        alert = value > threshold
-                    else:
-                        # 如果第一列不是数字，则按记录数判断
-                        alert = row_count > threshold
-                
-                # 如果触发告警，保存详细数据用于告警信息
-                detail_data = None
-                if alert and len(all_data) > 0:
-                    detail_data = all_data
-                
-                return {
-                    'value': value,
-                    'alert': alert,
-                    'detail_data': detail_data,
-                    'all_data': all_data,
-                    'row_count': row_count
-                }
+                    # 如果第一列不是数字，则按记录数判断
+                    alert = row_count > threshold
+            
+            # 如果触发告警，保存详细数据用于告警信息
+            detail_data = None
+            if alert and len(all_data) > 0:
+                detail_data = all_data
+            
+            return {
+                'value': value,
+                'alert': alert,
+                'detail_data': detail_data,
+                'all_data': all_data,
+                'row_count': row_count
+            }
         
         return {'status': 'error'}

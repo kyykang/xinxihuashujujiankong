@@ -37,6 +37,8 @@
                 <i class="bi bi-database text-warning"></i> 数据库
                 {% elif target.type == 'business' %}
                 <i class="bi bi-graph-up text-danger"></i> 业务指标
+                {% elif target.type == 'backup' %}
+                <i class="bi bi-archive text-secondary"></i> 备份文件
                 {% endif %}
             </td>
             <td>
@@ -79,6 +81,7 @@
                             <option value="application">应用监控</option>
                             <option value="database">数据库监控</option>
                             <option value="business">业务指标监控</option>
+                            <option value="backup">备份文件监控</option>
                         </select>
                     </div>
                     <div id="configFields"></div>
@@ -118,6 +121,7 @@
                             <option value="application">应用监控</option>
                             <option value="database">数据库监控</option>
                             <option value="business">业务指标监控</option>
+                            <option value="backup">备份文件监控</option>
                         </select>
                     </div>
                     <div id="editConfigFields"></div>
@@ -285,6 +289,51 @@ const configTemplates = {
             <label class="form-label">告警阈值</label>
             <input type="number" class="form-control" name="threshold">
         </div>
+    `,
+    backup: `
+        <div class="mb-3">
+            <label class="form-label">服务器地址</label>
+            <input type="text" class="form-control" name="host" placeholder="192.168.1.100" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">SSH端口</label>
+            <input type="number" class="form-control" name="port" value="22" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="username" placeholder="root" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">认证方式</label>
+            <select class="form-select" name="auth_type" id="backupAuthType" onchange="toggleBackupAuthMethod()">
+                <option value="password">密码</option>
+                <option value="key">SSH密钥</option>
+            </select>
+        </div>
+        <div id="backupPasswordAuth" class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password">
+        </div>
+        <div id="backupKeyAuth" class="mb-3" style="display:none;">
+            <label class="form-label">SSH密钥文件路径</label>
+            <input type="text" class="form-control" name="key_file" placeholder="/path/to/private_key">
+            <small class="form-text text-muted">服务器上的密钥文件绝对路径</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">备份目录路径</label>
+            <input type="text" class="form-control" name="backup_path" placeholder="/backup" required>
+            <small class="form-text text-muted">远程服务器上的备份文件目录</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">文件匹配模式</label>
+            <input type="text" class="form-control" name="file_pattern" value="*" placeholder="*.sql">
+            <small class="form-text text-muted">如: *.sql, *.tar.gz, backup_*, 默认为 *（所有文件）</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">最大文件年龄（小时）</label>
+            <input type="number" class="form-control" name="max_age_hours" placeholder="24">
+            <small class="form-text text-muted">超过此时间没有新备份文件则告警，留空则不检查</small>
+        </div>
     `
 };
 
@@ -430,6 +479,51 @@ const editConfigTemplates = {
             <label class="form-label">告警阈值</label>
             <input type="number" class="form-control" name="threshold">
         </div>
+    `,
+    backup: `
+        <div class="mb-3">
+            <label class="form-label">服务器地址</label>
+            <input type="text" class="form-control" name="host" placeholder="192.168.1.100" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">SSH端口</label>
+            <input type="number" class="form-control" name="port" value="22" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">用户名</label>
+            <input type="text" class="form-control" name="username" placeholder="root" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">认证方式</label>
+            <select class="form-select" name="auth_type" onchange="toggleEditBackupAuthMethod()">
+                <option value="password">密码</option>
+                <option value="key">SSH密钥</option>
+            </select>
+        </div>
+        <div id="editBackupPasswordAuth" class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" name="password" placeholder="留空则不修改">
+        </div>
+        <div id="editBackupKeyAuth" class="mb-3" style="display:none;">
+            <label class="form-label">SSH密钥文件路径</label>
+            <input type="text" class="form-control" name="key_file" placeholder="/path/to/private_key">
+            <small class="form-text text-muted">服务器上的密钥文件绝对路径</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">备份目录路径</label>
+            <input type="text" class="form-control" name="backup_path" placeholder="/backup" required>
+            <small class="form-text text-muted">远程服务器上的备份文件目录</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">文件匹配模式</label>
+            <input type="text" class="form-control" name="file_pattern" value="*" placeholder="*.sql">
+            <small class="form-text text-muted">如: *.sql, *.tar.gz, backup_*, 默认为 *（所有文件）</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">最大文件年龄（小时）</label>
+            <input type="number" class="form-control" name="max_age_hours" placeholder="24">
+            <small class="form-text text-muted">超过此时间没有新备份文件则告警，留空则不检查</small>
+        </div>
     `
 };
 
@@ -517,6 +611,23 @@ function updateEditBusinessDbPort() {
         if (dbPort.value == '3306' || dbPort.value == '1433' || dbPort.value == '') {
             dbPort.value = dbType.value === 'sqlserver' ? '1433' : '3306';
         }
+    }
+}
+
+function toggleBackupAuthMethod() {
+    const authType = document.getElementById('backupAuthType').value;
+    document.getElementById('backupPasswordAuth').style.display = authType === 'password' ? 'block' : 'none';
+    document.getElementById('backupKeyAuth').style.display = authType === 'key' ? 'block' : 'none';
+}
+
+function toggleEditBackupAuthMethod() {
+    const authTypeSelect = document.querySelector('#editConfigFields select[name="auth_type"]');
+    if (authTypeSelect) {
+        const authType = authTypeSelect.value;
+        const passwordAuth = document.getElementById('editBackupPasswordAuth');
+        const keyAuth = document.getElementById('editBackupKeyAuth');
+        if (passwordAuth) passwordAuth.style.display = authType === 'password' ? 'block' : 'none';
+        if (keyAuth) keyAuth.style.display = authType === 'key' ? 'block' : 'none';
     }
 }
 

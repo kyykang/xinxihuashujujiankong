@@ -279,3 +279,103 @@ class BusinessMonitor:
             }
         
         return {'status': 'error'}
+
+class BackupMonitor:
+    """备份文件监控"""
+    
+    @staticmethod
+    def check_backup(config):
+        """检查备份文件
+        
+        Args:
+            config: 配置字典，包含：
+                - host: 服务器地址
+                - port: SSH端口
+                - username: 用户名
+                - password: 密码
+                - key_file: SSH密钥文件（可选）
+                - backup_path: 备份目录路径
+                - file_pattern: 文件匹配模式（可选，默认*）
+                - max_age_hours: 最大文件年龄（小时），超过此时间没有新文件则告警（可选）
+        
+        Returns:
+            dict: 检查结果
+        """
+        from remote_monitor import RemoteServerMonitor
+        from datetime import datetime
+        import time
+        
+        try:
+            monitor = RemoteServerMonitor(
+                host=config['host'],
+                port=config.get('port', 22),
+                username=config['username'],
+                password=config.get('password'),
+                key_file=config.get('key_file')
+            )
+            
+            if not monitor.connect():
+                return {
+                    'status': 'error',
+                    'error': '无法连接到服务器',
+                    'files': [],
+                    'total_count': 0,
+                    'total_size': 0
+                }
+            
+            # 获取备份文件列表
+            backup_path = config.get('backup_path', '/backup')
+            file_pattern = config.get('file_pattern', '*')
+            
+            result = monitor.check_backup_files(backup_path, file_pattern)
+            monitor.disconnect()
+            
+            if not result['success']:
+                return {
+                    'status': 'error',
+                    'error': result.get('error', '获取备份文件失败'),
+                    'files': [],
+                    'total_count': 0,
+                    'total_size': 0
+                }
+            
+            # 检查是否需要告警
+            alert = False
+            alert_message = ''
+            
+            # 检查文件数量
+            if result['total_count'] == 0:
+                alert = True
+                alert_message = f"备份目录 {backup_path} 中没有找到匹配的备份文件"
+            else:
+                # 检查最新文件的年龄
+                max_age_hours = config.get('max_age_hours')
+                if max_age_hours and result['files']:
+                    latest_file = result['files'][0]  # 文件已按时间倒序排列
+                    file_age_seconds = time.time() - latest_file['mtime']
+                    file_age_hours = file_age_seconds / 3600
+                    
+                    if file_age_hours > max_age_hours:
+                        alert = True
+                        alert_message = f"最新备份文件 {latest_file['name']} 已超过 {max_age_hours} 小时（实际: {file_age_hours:.1f}小时）"
+            
+            return {
+                'status': 'normal' if not alert else 'warning',
+                'alert': alert,
+                'alert_message': alert_message,
+                'files': result['files'][:10],  # 只保留最新的10个文件
+                'total_count': result['total_count'],
+                'total_size': result['total_size'],
+                'total_size_human': result.get('total_size_human', '0 B'),
+                'backup_path': backup_path,
+                'file_pattern': file_pattern
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'files': [],
+                'total_count': 0,
+                'total_size': 0
+            }

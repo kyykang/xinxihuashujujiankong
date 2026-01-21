@@ -304,6 +304,48 @@ def api_test_connection():
                     'message': f'查询失败: {result.get("error", "未知错误")}'
                 })
         
+        elif target_type == 'backup':
+            # 测试备份文件检查
+            from remote_monitor import RemoteServerMonitor
+            
+            monitor = RemoteServerMonitor(
+                host=config.get('host'),
+                port=int(config.get('port', 22)),
+                username=config.get('username'),
+                password=config.get('password'),
+                key_file=config.get('key_file')
+            )
+            
+            if not monitor.connect():
+                return jsonify({
+                    'success': False,
+                    'message': '无法连接到远程服务器，请检查地址、端口、用户名和密码/密钥'
+                })
+            
+            # 测试获取备份文件列表
+            backup_path = config.get('backup_path', '/backup')
+            file_pattern = config.get('file_pattern', '*')
+            
+            result = monitor.check_backup_files(backup_path, file_pattern)
+            monitor.disconnect()
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'message': f'连接成功！找到 {result["total_count"]} 个备份文件',
+                    'details': {
+                        'file_count': result['total_count'],
+                        'total_size': result.get('total_size_human', '0 B'),
+                        'latest_file': result['files'][0]['name'] if result['files'] else '无',
+                        'latest_time': result['files'][0]['mtime_str'] if result['files'] else '无'
+                    }
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': f'获取备份文件失败: {result.get("error", "未知错误")}'
+                })
+        
         else:
             return jsonify({
                 'success': False,
@@ -423,6 +465,7 @@ def api_dashboard_stats():
         'applications': [],
         'databases': [],
         'business': [],
+        'backups': [],
         'summary': {
             'total': len(targets),
             'online': 0,
@@ -458,6 +501,8 @@ def api_dashboard_stats():
                 stats['databases'].append(target_data)
             elif target['type'] == 'business':
                 stats['business'].append(target_data)
+            elif target['type'] == 'backup':
+                stats['backups'].append(target_data)
             
             # 统计状态
             if latest['status'] == 'normal':

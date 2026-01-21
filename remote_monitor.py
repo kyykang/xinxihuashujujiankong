@@ -128,3 +128,89 @@ class RemoteServerMonitor:
             info['uptime'] = result['output']
         
         return info
+    
+    def check_backup_files(self, backup_path, file_pattern='*'):
+        """检查备份文件
+        
+        Args:
+            backup_path: 备份文件目录路径
+            file_pattern: 文件匹配模式，如 *.sql, *.tar.gz, backup_*
+        
+        Returns:
+            dict: 包含文件列表和统计信息
+        """
+        try:
+            # 使用find命令查找文件，获取详细信息
+            # 格式：文件名|大小(字节)|修改时间(时间戳)
+            cmd = f"find {backup_path} -maxdepth 1 -type f -name '{file_pattern}' -printf '%f|%s|%T@\\n' 2>/dev/null | sort -t'|' -k3 -r"
+            result = self.execute_command(cmd, timeout=10)
+            
+            if not result['success']:
+                return {
+                    'success': False,
+                    'error': result.get('error', '执行命令失败'),
+                    'files': [],
+                    'total_count': 0,
+                    'total_size': 0
+                }
+            
+            files = []
+            total_size = 0
+            
+            if result['output']:
+                for line in result['output'].split('\n'):
+                    if not line.strip():
+                        continue
+                    
+                    try:
+                        parts = line.split('|')
+                        if len(parts) >= 3:
+                            filename = parts[0]
+                            size = int(parts[1])
+                            mtime = float(parts[2])
+                            
+                            files.append({
+                                'name': filename,
+                                'size': size,
+                                'size_human': self._format_size(size),
+                                'mtime': mtime,
+                                'mtime_str': self._format_timestamp(mtime)
+                            })
+                            total_size += size
+                    except Exception as e:
+                        print(f"解析文件信息失败: {line}, 错误: {e}")
+                        continue
+            
+            return {
+                'success': True,
+                'files': files,
+                'total_count': len(files),
+                'total_size': total_size,
+                'total_size_human': self._format_size(total_size)
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'files': [],
+                'total_count': 0,
+                'total_size': 0
+            }
+    
+    def _format_size(self, size_bytes):
+        """格式化文件大小"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+    
+    def _format_timestamp(self, timestamp):
+        """格式化时间戳"""
+        from datetime import datetime
+        try:
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            return 'N/A'

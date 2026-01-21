@@ -298,6 +298,95 @@
         </div>
     </div>
 </div>
+
+<!-- 备份文件监控 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-archive"></i> 备份文件监控</h5>
+            </div>
+            <div class="card-body">
+                {% set backup_targets = targets|selectattr('type', 'equalto', 'backup')|list %}
+                {% if backup_targets|length == 0 %}
+                <div class="text-muted text-center py-3">暂无备份文件监控</div>
+                {% else %}
+                <div class="row" id="backupFilesList">
+                    {% for target in backup_targets %}
+                    <div class="col-md-6 mb-3 draggable-item" data-id="{{ target.id }}" data-type="backup">
+                        <div class="card border-{% if target.latest_data and target.latest_data.status == 'warning' %}warning{% elif target.latest_data and target.latest_data.status == 'error' %}danger{% else %}secondary{% endif %}">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="cursor: move;">
+                                <strong>
+                                    <i class="bi bi-grip-vertical text-muted me-2"></i>
+                                    {{ target.name }}
+                                </strong>
+                                {% if target.latest_data %}
+                                <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% elif target.latest_data.status == 'warning' %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {% if target.latest_data.status == 'normal' %}正常
+                                    {% elif target.latest_data.status == 'warning' %}告警
+                                    {% else %}异常{% endif %}
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary">未知</span>
+                                {% endif %}
+                            </div>
+                            <div class="card-body">
+                                {% if target.latest_data %}
+                                {% set backup_data = target.latest_data.metric_value | from_json %}
+                                
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><i class="bi bi-folder"></i> 备份目录:</span>
+                                        <code>{{ backup_data.backup_path }}</code>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span><i class="bi bi-file-earmark"></i> 文件数量:</span>
+                                        <strong>{{ backup_data.total_count }}</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span><i class="bi bi-hdd"></i> 总大小:</span>
+                                        <strong>{{ backup_data.total_size_human }}</strong>
+                                    </div>
+                                </div>
+                                
+                                {% if backup_data.alert and backup_data.alert_message %}
+                                <div class="alert alert-warning mb-2">
+                                    <i class="bi bi-exclamation-triangle"></i> {{ backup_data.alert_message }}
+                                </div>
+                                {% endif %}
+                                
+                                {% if backup_data.files and backup_data.files|length > 0 %}
+                                <div class="border rounded p-2">
+                                    <strong>最新备份文件（前5个）：</strong>
+                                    <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
+                                        {% for file in backup_data.files[:5] %}
+                                        <div class="mb-1 d-flex justify-content-between">
+                                            <span class="text-truncate" style="max-width: 60%;">{{ file.name }}</span>
+                                            <span class="text-muted">{{ file.size_human }} | {{ file.mtime_str }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock"></i> {{ target.latest_data.created_at | local_time }}
+                                    </small>
+                                </div>
+                                {% else %}
+                                <div class="text-muted">暂无数据</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -353,6 +442,21 @@ function initDragAndDrop() {
             }
         });
     }
+    
+    // 备份文件容器
+    const backupContainer = document.getElementById('backupFilesList');
+    if (backupContainer) {
+        new Sortable(backupContainer, {
+            animation: 150,
+            handle: '.card-header',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: function() {
+                saveDashboardLayout();
+            }
+        });
+    }
 }
 
 // 保存仪表板布局到localStorage
@@ -360,7 +464,8 @@ function saveDashboardLayout() {
     const layout = {
         servers: [],
         appDb: [],
-        business: []
+        business: [],
+        backups: []
     };
     
     // 保存服务器图表顺序
@@ -379,6 +484,12 @@ function saveDashboardLayout() {
     const businessItems = document.querySelectorAll('#businessMetricsList .draggable-item');
     businessItems.forEach(item => {
         layout.business.push(item.dataset.id);
+    });
+    
+    // 保存备份文件顺序
+    const backupItems = document.querySelectorAll('#backupFilesList .draggable-item');
+    backupItems.forEach(item => {
+        layout.backups.push(item.dataset.id);
     });
     
     localStorage.setItem('dashboardLayout', JSON.stringify(layout));
@@ -428,6 +539,19 @@ function restoreDashboardLayout() {
                     const item = businessContainer.querySelector(`[data-id="${id}"]`);
                     if (item) {
                         businessContainer.appendChild(item);
+                    }
+                });
+            }
+        }
+        
+        // 恢复备份文件顺序
+        if (layout.backups && layout.backups.length > 0) {
+            const backupContainer = document.getElementById('backupFilesList');
+            if (backupContainer) {
+                layout.backups.forEach(id => {
+                    const item = backupContainer.querySelector(`[data-id="${id}"]`);
+                    if (item) {
+                        backupContainer.appendChild(item);
                     }
                 });
             }
@@ -553,6 +677,9 @@ function updateStats() {
             
             // 更新业务指标列表
             updateBusinessMetricsList(data.business);
+            
+            // 更新备份文件列表
+            updateBackupFilesList(data.backups || []);
         })
         .catch(error => console.error('更新统计失败:', error));
 }
@@ -739,6 +866,125 @@ function updateBusinessMetricsList(business) {
     console.log('业务指标列表更新完成');
 }
 
+// 更新备份文件列表
+function updateBackupFilesList(backups) {
+    console.log('更新备份文件列表，数据:', backups);
+    const listElement = document.getElementById('backupFilesList');
+    if (!listElement) {
+        console.error('backupFilesList 元素未找到');
+        return;
+    }
+    
+    if (backups.length === 0) {
+        listElement.innerHTML = '<div class="col-12"><div class="text-muted text-center py-3">暂无备份文件监控</div></div>';
+        return;
+    }
+    
+    listElement.innerHTML = '';
+    backups.forEach(backup => {
+        try {
+            console.log('处理备份监控:', backup.name);
+            let statusClass = 'secondary';
+            let statusText = '未知';
+            let borderClass = 'secondary';
+            
+            if (backup.status === 'normal') {
+                statusClass = 'success';
+                statusText = '正常';
+                borderClass = 'secondary';
+            } else if (backup.status === 'warning') {
+                statusClass = 'warning';
+                statusText = '告警';
+                borderClass = 'warning';
+            } else {
+                statusClass = 'danger';
+                statusText = '异常';
+                borderClass = 'danger';
+            }
+            
+            // 解析数据
+            let backupData = {};
+            try {
+                backupData = typeof backup.data === 'string' ? JSON.parse(backup.data) : backup.data;
+                console.log('解析后的备份数据:', backupData);
+            } catch (e) {
+                console.error('解析备份数据失败:', e, '原始数据:', backup.data);
+                return;
+            }
+            
+            // 构建告警信息HTML
+            let alertHtml = '';
+            if (backupData.alert && backupData.alert_message) {
+                alertHtml = `
+                    <div class="alert alert-warning mb-2">
+                        <i class="bi bi-exclamation-triangle"></i> ${backupData.alert_message}
+                    </div>
+                `;
+            }
+            
+            // 构建文件列表HTML
+            let filesHtml = '';
+            if (backupData.files && backupData.files.length > 0) {
+                filesHtml = `
+                    <div class="border rounded p-2">
+                        <strong>最新备份文件（前5个）：</strong>
+                        <div style="font-family: monospace; font-size: 0.85em; margin-top: 10px; max-height: 150px; overflow-y: auto;">
+                `;
+                
+                backupData.files.slice(0, 5).forEach(file => {
+                    filesHtml += `
+                        <div class="mb-1 d-flex justify-content-between">
+                            <span class="text-truncate" style="max-width: 60%;">${file.name}</span>
+                            <span class="text-muted">${file.size_human} | ${file.mtime_str}</span>
+                        </div>
+                    `;
+                });
+                
+                filesHtml += `</div></div>`;
+            }
+            
+            const item = document.createElement('div');
+            item.className = 'col-md-6 mb-3';
+            item.innerHTML = `
+                <div class="card border-${borderClass}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>${backup.name}</strong>
+                        <span class="badge bg-${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span><i class="bi bi-folder"></i> 备份目录:</span>
+                                <code>${backupData.backup_path || 'N/A'}</code>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span><i class="bi bi-file-earmark"></i> 文件数量:</span>
+                                <strong>${backupData.total_count || 0}</strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span><i class="bi bi-hdd"></i> 总大小:</span>
+                                <strong>${backupData.total_size_human || '0 B'}</strong>
+                            </div>
+                        </div>
+                        ${alertHtml}
+                        ${filesHtml}
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i> ${backup.time}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            listElement.appendChild(item);
+            console.log('备份监控卡片已添加:', backup.name);
+        } catch (e) {
+            console.error('处理备份监控失败:', backup.name, e);
+        }
+    });
+    console.log('备份文件列表更新完成');
+}
+
 // 刷新仪表板（局部刷新，不重载整个页面）
 function refreshDashboard() {
     const button = document.getElementById('refreshBtn');
@@ -804,6 +1050,9 @@ function refreshDashboard() {
             
             // 更新业务指标列表
             updateBusinessMetricsList(data.business);
+            
+            // 更新备份文件列表
+            updateBackupFilesList(data.backups || []);
             
             // 恢复按钮状态
             button.disabled = false;

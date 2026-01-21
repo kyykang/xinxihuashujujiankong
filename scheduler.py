@@ -1,5 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from monitors import ServerMonitor, StorageMonitor, ApplicationMonitor, DatabaseMonitor, BusinessMonitor
+from monitors import ServerMonitor, StorageMonitor, ApplicationMonitor, DatabaseMonitor, BusinessMonitor, BackupMonitor
 from database import get_db
 from alerts import send_alert
 from config import Config
@@ -70,6 +70,8 @@ def run_single_monitor(target):
             elapsed = check_database(target_id, config)
         elif target_type == 'business':
             elapsed = check_business(target_id, config)
+        elif target_type == 'backup':
+            elapsed = check_backup(target_id, config)
         
         if elapsed == 0:
             elapsed = time.time() - start_time
@@ -292,6 +294,36 @@ def check_business(target_id, config):
                 alert_message += f"  ... 还有 {row_count - max_display_rows} 条记录"
         
         send_alert(target_id, 'business', alert_message)
+    
+    db.close()
+    return elapsed
+
+def check_backup(target_id, config):
+    """检查备份文件"""
+    import time
+    start_time = time.time()
+    
+    result = BackupMonitor.check_backup(config)
+    
+    elapsed = time.time() - start_time
+    result['execution_time'] = round(elapsed, 2)
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    status = result.get('status', 'error')
+    
+    cursor.execute(
+        'INSERT INTO monitor_data (target_id, metric_type, metric_value, status) VALUES (?, ?, ?, ?)',
+        (target_id, 'backup', json.dumps(result), status)
+    )
+    db.commit()
+    
+    if result.get('alert'):
+        alert_message = result.get('alert_message', '备份文件检查异常')
+        send_alert(target_id, 'backup', alert_message)
+    elif result.get('status') == 'error':
+        send_alert(target_id, 'backup', f"备份检查失败: {result.get('error', '未知错误')}")
     
     db.close()
     return elapsed

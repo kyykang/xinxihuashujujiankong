@@ -1,13 +1,48 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 from database import init_db, get_db
 from scheduler import start_scheduler
 from config import Config
 from utils import utc_to_local, format_relative_time, get_local_time
+from crypto_utils import encrypt_config, decrypt_config
+from werkzeug.security import check_password_hash, generate_password_hash
+from functools import wraps
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.config.from_object(Config)
+app.secret_key = Config.SECRET_KEY  # 用于session加密
+
+# 登录装饰器
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('请先登录', 'warning')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# 管理员权限装饰器
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('请先登录', 'warning')
+            return redirect(url_for('login'))
+        
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT is_admin FROM users WHERE id = ?', (session['user_id'],))
+        user = cursor.fetchone()
+        db.close()
+        
+        if not user or not user['is_admin']:
+            flash('需要管理员权限', 'danger')
+            return redirect(url_for('index'))
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 # 注册模板过滤器
 @app.template_filter('local_time')
@@ -39,6 +74,105 @@ def favicon():
     # 返回一个简单的透明图标，避免404错误
     return '', 204  # 204 No Content
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """用户登录"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        remember = request.form.get('remember') == 'on'
+        
+        if not username or not password:
+            flash('请输入用户名和密码', 'danger')
+            return render_template('login.html')
+        
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+        
+        if user and check_password_hash(user['password_hash'], password):
+            # 登录成功
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['is_admin'] = user['is_admin']
+            
+            # 设置session过期时间
+            if remember:
+                session.permanent = True
+                app.permanent_session_lifetime = timedelta(days=30)
+            else:
+                session.permanent = False
+            
+            # 更新最后登录时间
+            cursor.execute('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', (user['id'],))
+            db.commit()
+            db.close()
+            
+            flash(f'欢迎回来，{username}！', 'success')
+            
+            # 重定向到之前访问的页面或首页
+            next_page = request.args.get('next')
+            return redirect(next_page if next_page else url_for('index'))
+        else:
+            db.close()
+            flash('用户名或密码错误', 'danger')
+            return render_template('login.html')
+    
+    # GET请求，显示登录页面
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """用户注销"""
+    username = session.get('username', '用户')
+    session.clear()
+    flash(f'再见，{username}！', 'info')
+    return redirect(url_for('login'))
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """修改密码"""
+    if request.method == 'POST':
+        old_password = request.form.get('old_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not all([old_password, new_password, confirm_password]):
+            flash('请填写所有字段', 'danger')
+            return render_template('change_password.html')
+        
+        if new_password != confirm_password:
+            flash('两次输入的新密码不一致', 'danger')
+            return render_template('change_password.html')
+        
+        if len(new_password) < 6:
+            flash('密码长度至少6位', 'danger')
+            return render_template('change_password.html')
+        
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute('SELECT password_hash FROM users WHERE id = ?', (session['user_id'],))
+        user = cursor.fetchone()
+        
+        if not user or not check_password_hash(user['password_hash'], old_password):
+            db.close()
+            flash('原密码错误', 'danger')
+            return render_template('change_password.html')
+        
+        # 更新密码
+        new_password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+        cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', 
+                      (new_password_hash, session['user_id']))
+        db.commit()
+        db.close()
+        
+        flash('密码修改成功，请重新登录', 'success')
+        return redirect(url_for('logout'))
+    
+    return render_template('change_password.html')
+
 @app.route('/test-modal')
 def test_modal():
     """模态框测试页面"""
@@ -50,11 +184,13 @@ def test_refresh():
     return render_template('test_refresh.html')
 
 @app.route('/')
+@login_required
 def index():
     """首页 - 监控概览"""
     return render_template('index.html')
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     """监控仪表板"""
     db = get_db()
@@ -95,6 +231,7 @@ def dashboard():
                          targets=targets_with_data)
 
 @app.route('/targets')
+@login_required
 def targets():
     """监控目标管理"""
     db = get_db()
@@ -119,11 +256,15 @@ def monitor_detail(target_id):
     return render_template('monitor_detail.html', target=dict(target))
 
 @app.route('/api/test-connection', methods=['POST'])
+@login_required
 def api_test_connection():
     """测试连接"""
     data = request.json
     target_type = data.get('type')
     config = data.get('config', {})
+    
+    # 解密配置中的敏感信息
+    config = decrypt_config(config)
     
     try:
         if target_type == 'server':
@@ -359,6 +500,7 @@ def api_test_connection():
         })
 
 @app.route('/api/targets', methods=['GET', 'POST'])
+@login_required
 def api_targets():
     """监控目标API"""
     db = get_db()
@@ -366,9 +508,13 @@ def api_targets():
     
     if request.method == 'POST':
         data = request.json
+        
+        # 加密配置中的敏感信息
+        encrypted_config = encrypt_config(data['config'])
+        
         cursor.execute(
             'INSERT INTO monitor_targets (name, type, config, enabled) VALUES (?, ?, ?, ?)',
-            (data['name'], data['type'], json.dumps(data['config']), data.get('enabled', 1))
+            (data['name'], data['type'], json.dumps(encrypted_config), data.get('enabled', 1))
         )
         db.commit()
         target_id = cursor.lastrowid
@@ -381,6 +527,7 @@ def api_targets():
     return jsonify(targets)
 
 @app.route('/api/targets/<int:target_id>', methods=['GET', 'PUT', 'DELETE'])
+@login_required
 def api_target(target_id):
     """单个监控目标API"""
     db = get_db()
@@ -399,17 +546,25 @@ def api_target(target_id):
         cursor.execute('SELECT config FROM monitor_targets WHERE id = ?', (target_id,))
         result = cursor.fetchone()
         if result:
-            old_config = json.loads(result['config'])
+            old_config_str = result['config']
+            old_config = json.loads(old_config_str)
+            
+            # 解密旧配置
+            old_config = decrypt_config(old_config)
+            
             new_config = data['config']
             
             # 如果密码字段为空，保留原密码
             if 'password' in old_config and (not new_config.get('password') or new_config.get('password') == ''):
                 new_config['password'] = old_config['password']
             
+            # 加密新配置
+            encrypted_config = encrypt_config(new_config)
+            
             # 更新数据
             cursor.execute(
                 'UPDATE monitor_targets SET name = ?, type = ?, config = ?, enabled = ? WHERE id = ?',
-                (data['name'], data['type'], json.dumps(new_config), data.get('enabled', 1), target_id)
+                (data['name'], data['type'], json.dumps(encrypted_config), data.get('enabled', 1), target_id)
             )
             db.commit()
             db.close()
@@ -424,6 +579,7 @@ def api_target(target_id):
     return jsonify(dict(target) if target else {})
 
 @app.route('/api/monitor-data/<int:target_id>')
+@login_required
 def api_monitor_data(target_id):
     """获取监控数据"""
     db = get_db()
@@ -451,6 +607,7 @@ def api_monitor_data(target_id):
     return jsonify(data)
 
 @app.route('/api/dashboard-stats')
+@login_required
 def api_dashboard_stats():
     """获取仪表板统计数据"""
     db = get_db()
@@ -516,6 +673,7 @@ def api_dashboard_stats():
     return jsonify(stats)
 
 @app.route('/alerts')
+@login_required
 def alerts():
     """告警记录"""
     db = get_db()
@@ -532,11 +690,13 @@ def alerts():
     return render_template('alerts.html', alerts=alerts)
 
 @app.route('/config')
+@login_required
 def config():
     """系统配置"""
     return render_template('config.html')
 
 @app.route('/api/config', methods=['GET', 'POST'])
+@login_required
 def api_config():
     """系统配置API"""
     db = get_db()
@@ -570,6 +730,7 @@ def api_config():
     return jsonify(config)
 
 @app.route('/api/database-size')
+@login_required
 def api_database_size():
     """获取数据库大小"""
     import os
@@ -595,6 +756,7 @@ def api_database_size():
         })
 
 @app.route('/api/clear-alerts', methods=['POST'])
+@login_required
 def api_clear_alerts():
     """清除告警记录"""
     data = request.json

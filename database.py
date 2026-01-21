@@ -5,6 +5,19 @@ def init_db():
     conn = sqlite3.connect(Config.DATABASE)
     cursor = conn.cursor()
     
+    # 用户表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            email TEXT,
+            is_admin INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        )
+    ''')
+    
     # 监控目标配置表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS monitor_targets (
@@ -51,6 +64,29 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # 检查是否有用户，如果没有则创建默认管理员
+    cursor.execute('SELECT COUNT(*) as count FROM users')
+    result = cursor.fetchone()
+    user_count = result[0] if result else 0
+    
+    if user_count == 0:
+        # 创建默认管理员账户
+        # 用户名: admin, 密码: admin123
+        from werkzeug.security import generate_password_hash
+        default_password_hash = generate_password_hash('admin123', method='pbkdf2:sha256')
+        
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, email, is_admin)
+            VALUES (?, ?, ?, ?)
+        ''', ('admin', default_password_hash, 'admin@example.com', 1))
+        
+        print("=" * 60)
+        print("已创建默认管理员账户：")
+        print("  用户名: admin")
+        print("  密码: admin123")
+        print("  请立即登录并修改密码！")
+        print("=" * 60)
     
     conn.commit()
     conn.close()

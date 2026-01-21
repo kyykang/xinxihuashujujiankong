@@ -2,6 +2,10 @@
 *.db
 monitoring.db
 
+# Security - Encryption keys
+.secret_key
+*.key
+
 # Python
 *.pyc
 *.py[cod]

@@ -3,6 +3,7 @@ from monitors import ServerMonitor, StorageMonitor, ApplicationMonitor, Database
 from database import get_db
 from alerts import send_alert
 from config import Config
+from crypto_utils import decrypt_config
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
@@ -58,6 +59,10 @@ def run_single_monitor(target):
     
     try:
         config = json.loads(target['config'])
+        
+        # 解密配置中的敏感信息
+        config = decrypt_config(config)
+        
         elapsed = 0
         
         if target_type == 'server':

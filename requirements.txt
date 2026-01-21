@@ -6,3 +6,4 @@ pymssql==2.3.11
 APScheduler==3.10.4
 paramiko==3.4.0
 pytz==2024.1
+cryptography==41.0.7

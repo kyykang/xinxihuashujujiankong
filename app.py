@@ -242,6 +242,7 @@ def targets():
     return render_template('targets.html', targets=targets)
 
 @app.route('/monitor/<int:target_id>')
+@login_required
 def monitor_detail(target_id):
     """监控详情页面"""
     db = get_db()

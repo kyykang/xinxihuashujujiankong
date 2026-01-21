@@ -8,7 +8,7 @@
         <h1 class="h2">监控仪表板</h1>
         <small class="text-muted">
             <i class="bi bi-info-circle"></i> 
-            数据每30秒自动更新，点击刷新按钮可立即更新统计数据
+            数据每<span id="refreshInterval">加载中...</span>秒自动更新，点击刷新按钮可立即更新统计数据
         </small>
     </div>
     <div class="btn-toolbar mb-2 mb-md-0">
@@ -1162,6 +1162,14 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', function() {
     console.log('仪表板页面加载完成');
     
+    // 检查Chart.js是否加载
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js未加载！');
+        alert('图表库加载失败，请刷新页面重试');
+        return;
+    }
+    console.log('Chart.js已加载，版本:', Chart.version);
+    
     // 先恢复布局
     restoreDashboardLayout();
     
@@ -1181,8 +1189,33 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('刷新按钮未找到');
     }
     
-    // 每30秒自动刷新统计数据
-    setInterval(updateStats, 30000);
+    // 获取系统配置的检查间隔，并设置自动刷新
+    fetch('/api/config')
+        .then(response => response.json())
+        .then(config => {
+            const checkInterval = parseInt(config.check_interval || 600); // 默认600秒
+            const refreshIntervalMs = checkInterval * 1000; // 转换为毫秒
+            
+            // 更新显示的刷新间隔
+            const refreshIntervalSpan = document.getElementById('refreshInterval');
+            if (refreshIntervalSpan) {
+                refreshIntervalSpan.textContent = checkInterval;
+            }
+            
+            console.log(`设置自动刷新间隔: ${checkInterval}秒`);
+            
+            // 设置自动刷新
+            setInterval(updateStats, refreshIntervalMs);
+        })
+        .catch(error => {
+            console.error('获取配置失败，使用默认30秒刷新:', error);
+            // 如果获取配置失败，使用默认30秒
+            const refreshIntervalSpan = document.getElementById('refreshInterval');
+            if (refreshIntervalSpan) {
+                refreshIntervalSpan.textContent = '30';
+            }
+            setInterval(updateStats, 30000);
+        });
 });
 </script>
 {% endblock %}

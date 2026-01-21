@@ -507,6 +507,11 @@ def api_targets():
     cursor = db.cursor()
     
     if request.method == 'POST':
+        # 只有管理员可以添加监控目标
+        if not session.get('is_admin'):
+            db.close()
+            return jsonify({'success': False, 'error': '需要管理员权限'})
+        
         data = request.json
         
         # 加密配置中的敏感信息
@@ -534,12 +539,22 @@ def api_target(target_id):
     cursor = db.cursor()
     
     if request.method == 'DELETE':
+        # 只有管理员可以删除监控目标
+        if not session.get('is_admin'):
+            db.close()
+            return jsonify({'success': False, 'error': '需要管理员权限'})
+        
         cursor.execute('DELETE FROM monitor_targets WHERE id = ?', (target_id,))
         db.commit()
         db.close()
         return jsonify({'success': True})
     
     if request.method == 'PUT':
+        # 只有管理员可以编辑监控目标
+        if not session.get('is_admin'):
+            db.close()
+            return jsonify({'success': False, 'error': '需要管理员权限'})
+        
         data = request.json
         
         # 获取原有配置
@@ -689,11 +704,129 @@ def alerts():
     db.close()
     return render_template('alerts.html', alerts=alerts)
 
+@app.route('/users')
+@admin_required
+def users():
+    """用户管理（仅管理员）"""
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT id, username, email, is_admin, created_at, last_login FROM users ORDER BY created_at DESC')
+    users = cursor.fetchall()
+    db.close()
+    return render_template('users.html', users=users)
+
 @app.route('/config')
 @login_required
 def config():
     """系统配置"""
     return render_template('config.html')
+
+@app.route('/api/users', methods=['GET', 'POST'])
+@admin_required
+def api_users():
+    """用户管理API（仅管理员）"""
+    db = get_db()
+    cursor = db.cursor()
+    
+    if request.method == 'POST':
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email', '')
+        is_admin = data.get('is_admin', 0)
+        
+        if not username or not password:
+            db.close()
+            return jsonify({'success': False, 'error': '用户名和密码不能为空'})
+        
+        if len(password) < 6:
+            db.close()
+            return jsonify({'success': False, 'error': '密码长度至少6位'})
+        
+        # 检查用户名是否已存在
+        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+        if cursor.fetchone():
+            db.close()
+            return jsonify({'success': False, 'error': '用户名已存在'})
+        
+        # 创建用户
+        password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+        cursor.execute('''
+            INSERT INTO users (username, password_hash, email, is_admin)
+            VALUES (?, ?, ?, ?)
+        ''', (username, password_hash, email, is_admin))
+        db.commit()
+        user_id = cursor.lastrowid
+        db.close()
+        
+        return jsonify({'success': True, 'id': user_id})
+    
+    # GET请求
+    cursor.execute('SELECT id, username, email, is_admin, created_at, last_login FROM users')
+    users = [dict(row) for row in cursor.fetchall()]
+    db.close()
+    return jsonify(users)
+
+@app.route('/api/users/<int:user_id>', methods=['GET', 'PUT', 'DELETE'])
+@admin_required
+def api_user(user_id):
+    """单个用户管理API（仅管理员）"""
+    db = get_db()
+    cursor = db.cursor()
+    
+    if request.method == 'DELETE':
+        # 不能删除自己
+        if user_id == session['user_id']:
+            db.close()
+            return jsonify({'success': False, 'error': '不能删除当前登录的用户'})
+        
+        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        db.commit()
+        db.close()
+        return jsonify({'success': True})
+    
+    if request.method == 'PUT':
+        data = request.json
+        username = data.get('username')
+        email = data.get('email', '')
+        is_admin = data.get('is_admin', 0)
+        password = data.get('password', '')
+        
+        if not username:
+            db.close()
+            return jsonify({'success': False, 'error': '用户名不能为空'})
+        
+        # 检查用户名是否与其他用户冲突
+        cursor.execute('SELECT id FROM users WHERE username = ? AND id != ?', (username, user_id))
+        if cursor.fetchone():
+            db.close()
+            return jsonify({'success': False, 'error': '用户名已存在'})
+        
+        # 更新用户信息
+        if password:
+            if len(password) < 6:
+                db.close()
+                return jsonify({'success': False, 'error': '密码长度至少6位'})
+            password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+            cursor.execute('''
+                UPDATE users SET username = ?, email = ?, is_admin = ?, password_hash = ?
+                WHERE id = ?
+            ''', (username, email, is_admin, password_hash, user_id))
+        else:
+            cursor.execute('''
+                UPDATE users SET username = ?, email = ?, is_admin = ?
+                WHERE id = ?
+            ''', (username, email, is_admin, user_id))
+        
+        db.commit()
+        db.close()
+        return jsonify({'success': True})
+    
+    # GET请求
+    cursor.execute('SELECT id, username, email, is_admin, created_at, last_login FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    db.close()
+    return jsonify(dict(user) if user else {})
 
 @app.route('/api/config', methods=['GET', 'POST'])
 @login_required
@@ -703,6 +836,11 @@ def api_config():
     cursor = db.cursor()
     
     if request.method == 'POST':
+        # 只有管理员可以修改配置
+        if not session.get('is_admin'):
+            db.close()
+            return jsonify({'success': False, 'error': '需要管理员权限'})
+        
         data = request.json
         need_restart = False
         

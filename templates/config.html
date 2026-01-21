@@ -76,7 +76,13 @@
                 </div>
             </div>
 
+            {% if session.is_admin %}
             <button type="button" class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> 只有管理员可以修改系统配置
+            </div>
+            {% endif %}
         </form>
     </div>
 </div>
@@ -95,6 +101,14 @@ function loadConfig() {
                 input.value = config[key];
             }
         }
+        
+        // 如果不是管理员，禁用所有输入
+        {% if not session.is_admin %}
+        const inputs = form.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.disabled = true;
+        });
+        {% endif %}
     });
 }
 

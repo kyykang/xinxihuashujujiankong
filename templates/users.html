@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}用户管理 - 信息化运维监控系统{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">用户管理</h1>
+    <button class="btn btn-primary" onclick="showAddUserModal()">
+        <i class="bi bi-person-plus"></i> 添加用户
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>邮箱</th>
+                        <th>角色</th>
+                        <th>创建时间</th>
+                        <th>最后登录</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTable">
+                    {% for user in users %}
+                    <tr>
+                        <td>
+                            <i class="bi bi-person-circle"></i> {{ user.username }}
+                        </td>
+                        <td>{{ user.email or '-' }}</td>
+                        <td>
+                            {% if user.is_admin %}
+                            <span class="badge bg-warning text-dark">管理员</span>
+                            {% else %}
+                            <span class="badge bg-secondary">普通用户</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.created_at|local_time }}</td>
+                        <td>{{ user.last_login|local_time if user.last_login else '从未登录' }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editUser({{ user.id }})">
+                                <i class="bi bi-pencil"></i> 编辑
+                            </button>
+                            {% if user.id != session.user_id %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser({{ user.id }}, '{{ user.username }}')">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑用户模态框 -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">添加用户</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <input type="hidden" id="userId">
+                    
+                    <div class="mb-3">
+                        <label for="username" class="form-label">用户名 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="username" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="email">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">
+                            密码 <span class="text-danger" id="passwordRequired">*</span>
+                            <small class="text-muted" id="passwordHint">(留空则不修改)</small>
+                        </label>
+                        <input type="password" class="form-control" id="password">
+                        <small class="text-muted">密码长度至少6位</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="isAdmin">
+                            <label class="form-check-label" for="isAdmin">
+                                管理员权限
+                            </label>
+                            <small class="form-text text-muted d-block">
+                                管理员可以添加/编辑/删除监控目标和管理用户，普通用户只能查看
+                            </small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveUser()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let userModal;
+let isEditMode = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    userModal = new bootstrap.Modal(document.getElementById('userModal'));
+});
+
+function showAddUserModal() {
+    isEditMode = false;
+    document.getElementById('userModalTitle').textContent = '添加用户';
+    document.getElementById('userForm').reset();
+    document.getElementById('userId').value = '';
+    document.getElementById('passwordRequired').style.display = 'inline';
+    document.getElementById('passwordHint').style.display = 'none';
+    document.getElementById('password').required = true;
+    userModal.show();
+}
+
+function editUser(userId) {
+    isEditMode = true;
+    document.getElementById('userModalTitle').textContent = '编辑用户';
+    document.getElementById('passwordRequired').style.display = 'none';
+    document.getElementById('passwordHint').style.display = 'inline';
+    document.getElementById('password').required = false;
+    
+    // 获取用户信息
+    fetch(`/api/users/${userId}`)
+        .then(response => response.json())
+        .then(user => {
+            document.getElementById('userId').value = user.id;
+            document.getElementById('username').value = user.username;
+            document.getElementById('email').value = user.email || '';
+            document.getElementById('isAdmin').checked = user.is_admin == 1;
+            document.getElementById('password').value = '';
+            userModal.show();
+        })
+        .catch(error => {
+            alert('获取用户信息失败: ' + error);
+        });
+}
+
+function saveUser() {
+    const userId = document.getElementById('userId').value;
+    const username = document.getElementById('username').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const isAdmin = document.getElementById('isAdmin').checked ? 1 : 0;
+    
+    if (!username) {
+        alert('请输入用户名');
+        return;
+    }
+    
+    if (!isEditMode && !password) {
+        alert('请输入密码');
+        return;
+    }
+    
+    if (password && password.length < 6) {
+        alert('密码长度至少6位');
+        return;
+    }
+    
+    const data = {
+        username: username,
+        email: email,
+        is_admin: isAdmin
+    };
+    
+    if (password) {
+        data.password = password;
+    }
+    
+    const url = isEditMode ? `/api/users/${userId}` : '/api/users';
+    const method = isEditMode ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(isEditMode ? '用户更新成功' : '用户添加成功');
+            userModal.hide();
+            location.reload();
+        } else {
+            alert('操作失败: ' + (result.error || '未知错误'));
+        }
+    })
+    .catch(error => {
+        alert('操作失败: ' + error);
+    });
+}
+
+function deleteUser(userId, username) {
+    if (!confirm(`确定要删除用户 "${username}" 吗？此操作不可恢复！`)) {
+        return;
+    }
+    
+    fetch(`/api/users/${userId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('用户删除成功');
+            location.reload();
+        } else {
+            alert('删除失败: ' + (result.error || '未知错误'));
+        }
+    })
+    .catch(error => {
+        alert('删除失败: ' + error);
+    });
+}
+</script>
+{% endblock %}

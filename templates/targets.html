@@ -5,9 +5,13 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">监控目标管理</h1>
+    {% if session.is_admin %}
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTargetModal">
         <i class="bi bi-plus-circle"></i> 添加监控目标
     </button>
+    {% else %}
+    <span class="badge bg-secondary">只读模式</span>
+    {% endif %}
 </div>
 
 <table class="table table-hover">
@@ -51,8 +55,10 @@
             <td>{{ target.created_at | local_time }}</td>
             <td>
                 <a href="/monitor/{{ target.id }}" class="btn btn-sm btn-info">详情</a>
+                {% if session.is_admin %}
                 <button class="btn btn-sm btn-warning edit-btn" data-target-id="{{ target.id }}">编辑</button>
                 <button class="btn btn-sm btn-danger delete-btn" data-target-id="{{ target.id }}">删除</button>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

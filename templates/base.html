@@ -109,6 +109,13 @@
                                 <i class="bi bi-gear"></i> 系统配置
                             </a>
                         </li>
+                        {% if session.is_admin %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/users">
+                                <i class="bi bi-people"></i> 用户管理
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                 </div>
             </nav>

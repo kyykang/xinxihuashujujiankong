@@ -75,13 +75,14 @@
 </div>
 
 <!-- 服务器监控图表 -->
-<div class="row mb-4">
+<div class="row mb-4" id="serverChartsContainer">
     {% for target in targets %}
     {% if target.type == 'server' and target.latest_data %}
-    <div class="col-md-6 mb-3">
+    <div class="col-md-6 mb-3 draggable-item" data-id="{{ target.id }}" data-type="server">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex justify-content-between align-items-center" style="cursor: move;">
                 <h5 class="mb-0">
+                    <i class="bi bi-grip-vertical text-muted me-2"></i>
                     <i class="bi bi-server"></i> {{ target.name }}
                 </h5>
                 <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% else %}bg-danger{% endif %}">
@@ -113,11 +114,14 @@
 </div>
 
 <!-- 应用和数据库状态 -->
-<div class="row">
-    <div class="col-md-6">
+<div class="row" id="appDbContainer">
+    <div class="col-md-6 draggable-item" data-id="applications" data-type="section">
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-globe"></i> 应用监控</h5>
+            <div class="card-header" style="cursor: move;">
+                <h5 class="mb-0">
+                    <i class="bi bi-grip-vertical text-muted me-2"></i>
+                    <i class="bi bi-globe"></i> 应用监控
+                </h5>
             </div>
             <div class="card-body">
                 <div class="list-group" id="applicationList">
@@ -155,10 +159,13 @@
         </div>
     </div>
     
-    <div class="col-md-6">
+    <div class="col-md-6 draggable-item" data-id="databases" data-type="section">
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-database"></i> 数据库监控</h5>
+            <div class="card-header" style="cursor: move;">
+                <h5 class="mb-0">
+                    <i class="bi bi-grip-vertical text-muted me-2"></i>
+                    <i class="bi bi-database"></i> 数据库监控
+                </h5>
             </div>
             <div class="card-body">
                 <div class="list-group" id="databaseList">
@@ -211,10 +218,13 @@
                 {% else %}
                 <div class="row" id="businessMetricsList">
                     {% for target in business_targets %}
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-6 mb-3 draggable-item" data-id="{{ target.id }}" data-type="business">
                         <div class="card border-{% if target.latest_data and target.latest_data.status == 'warning' %}warning{% else %}secondary{% endif %}">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <strong>{{ target.name }}</strong>
+                            <div class="card-header d-flex justify-content-between align-items-center" style="cursor: move;">
+                                <strong>
+                                    <i class="bi bi-grip-vertical text-muted me-2"></i>
+                                    {{ target.name }}
+                                </strong>
                                 {% if target.latest_data %}
                                 <span class="badge {% if target.latest_data.status == 'normal' %}bg-success{% elif target.latest_data.status == 'warning' %}bg-warning{% else %}bg-danger{% endif %}">
                                     {% if target.latest_data.status == 'normal' %}正常
@@ -291,9 +301,141 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- SortableJS库 -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
 // 存储图表实例
 const charts = {};
+
+// 初始化拖拽排序
+function initDragAndDrop() {
+    // 服务器图表容器
+    const serverContainer = document.getElementById('serverChartsContainer');
+    if (serverContainer) {
+        new Sortable(serverContainer, {
+            animation: 150,
+            handle: '.card-header',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: function() {
+                saveDashboardLayout();
+            }
+        });
+    }
+    
+    // 应用和数据库容器
+    const appDbContainer = document.getElementById('appDbContainer');
+    if (appDbContainer) {
+        new Sortable(appDbContainer, {
+            animation: 150,
+            handle: '.card-header',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: function() {
+                saveDashboardLayout();
+            }
+        });
+    }
+    
+    // 业务指标容器
+    const businessContainer = document.getElementById('businessMetricsList');
+    if (businessContainer) {
+        new Sortable(businessContainer, {
+            animation: 150,
+            handle: '.card-header',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: function() {
+                saveDashboardLayout();
+            }
+        });
+    }
+}
+
+// 保存仪表板布局到localStorage
+function saveDashboardLayout() {
+    const layout = {
+        servers: [],
+        appDb: [],
+        business: []
+    };
+    
+    // 保存服务器图表顺序
+    const serverItems = document.querySelectorAll('#serverChartsContainer .draggable-item');
+    serverItems.forEach(item => {
+        layout.servers.push(item.dataset.id);
+    });
+    
+    // 保存应用和数据库顺序
+    const appDbItems = document.querySelectorAll('#appDbContainer .draggable-item');
+    appDbItems.forEach(item => {
+        layout.appDb.push(item.dataset.id);
+    });
+    
+    // 保存业务指标顺序
+    const businessItems = document.querySelectorAll('#businessMetricsList .draggable-item');
+    businessItems.forEach(item => {
+        layout.business.push(item.dataset.id);
+    });
+    
+    localStorage.setItem('dashboardLayout', JSON.stringify(layout));
+    console.log('布局已保存:', layout);
+}
+
+// 恢复仪表板布局
+function restoreDashboardLayout() {
+    const layoutStr = localStorage.getItem('dashboardLayout');
+    if (!layoutStr) return;
+    
+    try {
+        const layout = JSON.parse(layoutStr);
+        console.log('恢复布局:', layout);
+        
+        // 恢复服务器图表顺序
+        if (layout.servers && layout.servers.length > 0) {
+            const serverContainer = document.getElementById('serverChartsContainer');
+            if (serverContainer) {
+                layout.servers.forEach(id => {
+                    const item = serverContainer.querySelector(`[data-id="${id}"]`);
+                    if (item) {
+                        serverContainer.appendChild(item);
+                    }
+                });
+            }
+        }
+        
+        // 恢复应用和数据库顺序
+        if (layout.appDb && layout.appDb.length > 0) {
+            const appDbContainer = document.getElementById('appDbContainer');
+            if (appDbContainer) {
+                layout.appDb.forEach(id => {
+                    const item = appDbContainer.querySelector(`[data-id="${id}"]`);
+                    if (item) {
+                        appDbContainer.appendChild(item);
+                    }
+                });
+            }
+        }
+        
+        // 恢复业务指标顺序
+        if (layout.business && layout.business.length > 0) {
+            const businessContainer = document.getElementById('businessMetricsList');
+            if (businessContainer) {
+                layout.business.forEach(id => {
+                    const item = businessContainer.querySelector(`[data-id="${id}"]`);
+                    if (item) {
+                        businessContainer.appendChild(item);
+                    }
+                });
+            }
+        }
+    } catch (e) {
+        console.error('恢复布局失败:', e);
+    }
+}
 
 // 初始化服务器监控图表
 function initServerCharts() {
@@ -743,6 +885,27 @@ style.textContent = `
             opacity: 0;
         }
     }
+    
+    /* 拖拽样式 */
+    .sortable-ghost {
+        opacity: 0.4;
+        background: #f8f9fa;
+    }
+    .sortable-chosen {
+        cursor: move;
+    }
+    .sortable-drag {
+        opacity: 0.8;
+    }
+    .draggable-item {
+        transition: transform 0.2s ease;
+    }
+    .draggable-item:hover .card {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .card-header[style*="cursor: move"]:hover {
+        background-color: #f8f9fa;
+    }
 `;
 document.head.appendChild(style);
 
@@ -750,8 +913,15 @@ document.head.appendChild(style);
 document.addEventListener('DOMContentLoaded', function() {
     console.log('仪表板页面加载完成');
     
+    // 先恢复布局
+    restoreDashboardLayout();
+    
+    // 初始化图表
     initServerCharts();
     updateStats();
+    
+    // 初始化拖拽功能
+    initDragAndDrop();
     
     // 绑定刷新按钮事件
     const refreshBtn = document.getElementById('refreshBtn');

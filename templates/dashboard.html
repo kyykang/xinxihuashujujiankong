@@ -986,8 +986,16 @@ function updateBackupFilesList(backups) {
 }
 
 // 刷新仪表板（局部刷新，不重载整个页面）
+let isRefreshing = false; // 防止重复刷新
+
 function refreshDashboard() {
     console.log('refreshDashboard函数被调用');
+    
+    // 如果正在刷新，忽略此次调用
+    if (isRefreshing) {
+        console.log('已在刷新中，忽略此次调用');
+        return;
+    }
     
     const button = document.getElementById('refreshBtn');
     if (!button) {
@@ -997,6 +1005,7 @@ function refreshDashboard() {
     
     console.log('找到刷新按钮，开始刷新...');
     
+    isRefreshing = true;
     const originalText = button.innerHTML;
     
     // 显示加载状态
@@ -1092,16 +1101,20 @@ function refreshDashboard() {
             }
             
             // 恢复按钮状态
+            console.log('恢复按钮状态');
             button.disabled = false;
             button.innerHTML = originalText;
+            isRefreshing = false;
             
             // 显示刷新成功提示
+            console.log('显示刷新成功提示');
             showToast('数据已更新');
         })
         .catch(error => {
             console.error('刷新失败:', error);
             button.disabled = false;
             button.innerHTML = originalText;
+            isRefreshing = false;
             showToast('刷新失败，请重试', 'error');
         });
 }

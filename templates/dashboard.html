@@ -1064,16 +1064,32 @@ function refreshDashboard() {
             });
             
             // 更新应用列表
-            updateApplicationList(data.applications);
+            try {
+                updateApplicationList(data.applications);
+            } catch (e) {
+                console.error('更新应用列表失败:', e);
+            }
             
             // 更新数据库列表
-            updateDatabaseList(data.databases);
+            try {
+                updateDatabaseList(data.databases);
+            } catch (e) {
+                console.error('更新数据库列表失败:', e);
+            }
             
             // 更新业务指标列表
-            updateBusinessMetricsList(data.business);
+            try {
+                updateBusinessMetricsList(data.business);
+            } catch (e) {
+                console.error('更新业务指标列表失败:', e);
+            }
             
             // 更新备份文件列表
-            updateBackupFilesList(data.backups || []);
+            try {
+                updateBackupFilesList(data.backups || []);
+            } catch (e) {
+                console.error('更新备份文件列表失败:', e);
+            }
             
             // 恢复按钮状态
             button.disabled = false;

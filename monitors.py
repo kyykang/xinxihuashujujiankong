@@ -351,13 +351,20 @@ class BackupMonitor:
                 # 检查最新文件的年龄
                 max_age_hours = config.get('max_age_hours')
                 if max_age_hours and result['files']:
-                    latest_file = result['files'][0]  # 文件已按时间倒序排列
-                    file_age_seconds = time.time() - latest_file['mtime']
-                    file_age_hours = file_age_seconds / 3600
+                    # 确保max_age_hours是数字类型
+                    try:
+                        max_age_hours = float(max_age_hours)
+                    except (ValueError, TypeError):
+                        max_age_hours = None
                     
-                    if file_age_hours > max_age_hours:
-                        alert = True
-                        alert_message = f"最新备份文件 {latest_file['name']} 已超过 {max_age_hours} 小时（实际: {file_age_hours:.1f}小时）"
+                    if max_age_hours:
+                        latest_file = result['files'][0]  # 文件已按时间倒序排列
+                        file_age_seconds = time.time() - latest_file['mtime']
+                        file_age_hours = file_age_seconds / 3600
+                        
+                        if file_age_hours > max_age_hours:
+                            alert = True
+                            alert_message = f"最新备份文件 {latest_file['name']} 已超过 {max_age_hours} 小时（实际: {file_age_hours:.1f}小时）"
             
             return {
                 'status': 'normal' if not alert else 'warning',

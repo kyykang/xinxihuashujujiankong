@@ -895,7 +895,7 @@ def api_database_size():
         })
 
 @app.route('/api/clear-alerts', methods=['POST'])
-@login_required
+@admin_required
 def api_clear_alerts():
     """清除告警记录"""
     data = request.json

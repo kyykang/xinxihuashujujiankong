@@ -5,11 +5,13 @@
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">告警记录</h1>
+    {% if session.is_admin %}
     <div class="btn-toolbar mb-2 mb-md-0">
         <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#clearAlertsModal">
             <i class="bi bi-trash"></i> 清除记录
         </button>
     </div>
+    {% endif %}
 </div>
 
 <!-- 统计信息 -->

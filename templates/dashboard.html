@@ -1054,12 +1054,35 @@ function refreshDashboard() {
     
     // 显示加载状态
     button.disabled = true;
-    button.innerHTML = '<i class="bi bi-arrow-clockwise rotating"></i> 刷新中...';
+    button.innerHTML = '<i class="bi bi-arrow-clockwise rotating"></i> 触发监控检查中...';
     
-    console.log('开始刷新数据...');
+    console.log('触发监控检查...');
     
-    // 更新统计数据
-    fetch('/api/dashboard-stats')
+    // 先触发监控检查
+    fetch('/api/trigger-check', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(checkResult => {
+        console.log('监控检查完成:', checkResult);
+        
+        if (!checkResult.success) {
+            throw new Error(checkResult.error || '监控检查失败');
+        }
+        
+        // 显示监控检查结果
+        button.innerHTML = '<i class="bi bi-arrow-clockwise rotating"></i> 刷新数据中...';
+        
+        // 等待1秒让数据写入数据库
+        return new Promise(resolve => setTimeout(resolve, 1000));
+    })
+    .then(() => {
+        console.log('开始刷新数据...');
+        
+        // 更新统计数据
+        return fetch('/api/dashboard-stats');
+    })
         .then(response => response.json())
         .then(data => {
             console.log('收到数据:', data);

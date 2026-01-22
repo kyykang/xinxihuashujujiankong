@@ -349,3 +349,63 @@ def start_scheduler():
     scheduler.add_job(run_monitors, 'interval', seconds=check_interval)
     scheduler.start()
 
+
+
+def trigger_manual_check():
+    """手动触发一次监控检查
+    
+    Returns:
+        dict: 包含执行结果的字典
+    """
+    import time
+    start_time = time.time()
+    
+    print("手动触发监控检查...")
+    
+    db = get_db()
+    cursor = db.cursor()
+    
+    cursor.execute('SELECT * FROM monitor_targets WHERE enabled = 1')
+    targets = cursor.fetchall()
+    db.close()
+    
+    if not targets:
+        return {
+            'success': True,
+            'message': '没有启用的监控目标',
+            'completed': 0,
+            'failed': 0,
+            'elapsed': 0
+        }
+    
+    # 使用线程池并行执行监控任务
+    futures = []
+    for target in targets:
+        future = executor.submit(run_single_monitor, dict(target))
+        futures.append(future)
+    
+    # 等待所有任务完成
+    completed = 0
+    failed = 0
+    for future in as_completed(futures):
+        try:
+            result = future.result()
+            if result:
+                completed += 1
+            else:
+                failed += 1
+        except Exception as e:
+            failed += 1
+            print(f"监控任务异常: {e}")
+    
+    elapsed = time.time() - start_time
+    print(f"手动监控完成: {completed} 成功, {failed} 失败, 耗时 {elapsed:.2f}秒")
+    
+    return {
+        'success': True,
+        'message': f'监控检查完成',
+        'completed': completed,
+        'failed': failed,
+        'total': len(targets),
+        'elapsed': round(elapsed, 2)
+    }

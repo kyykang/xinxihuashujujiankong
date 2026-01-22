@@ -894,6 +894,21 @@ def api_database_size():
             'error': str(e)
         })
 
+@app.route('/api/trigger-check', methods=['POST'])
+@login_required
+def api_trigger_check():
+    """手动触发监控检查"""
+    from scheduler import trigger_manual_check
+    
+    try:
+        result = trigger_manual_check()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 @app.route('/api/clear-alerts', methods=['POST'])
 @admin_required
 def api_clear_alerts():

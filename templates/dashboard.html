@@ -100,7 +100,7 @@
                     </div>
                 </div>
                 <div class="mt-3 d-flex justify-content-between align-items-center">
-                    <small class="text-muted">最后更新: {{ target.latest_data.created_at | local_time }}</small>
+                    <small class="text-muted" id="update-time-{{ target.id }}">最后更新: {{ target.latest_data.created_at | local_time }}</small>
                     {% set metric_data = target.latest_data.metric_value | from_json %}
                     <small class="text-muted">
                         <i class="bi bi-stopwatch"></i> 耗时: {{ metric_data.execution_time|default(0)|round(2) }}秒
@@ -1017,6 +1017,16 @@ function refreshDashboard() {
             
             // 更新服务器图表
             console.log('更新服务器图表，数量:', data.servers.length);
+            const currentTime = new Date().toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            
             data.servers.forEach(server => {
                 console.log('处理服务器:', server.id, '数据:', server.data);
                 if (charts[server.id]) {
@@ -1037,6 +1047,13 @@ function refreshDashboard() {
                             metrics.disk || 0
                         ];
                         charts[server.id].update();
+                        
+                        // 更新时间显示
+                        const timeElement = document.getElementById(`update-time-${server.id}`);
+                        if (timeElement) {
+                            timeElement.textContent = `最后更新: ${currentTime}`;
+                        }
+                        
                         console.log('图表', server.id, '更新成功');
                     } catch (e) {
                         console.error('更新图表失败:', server.id, e);

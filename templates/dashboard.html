@@ -694,6 +694,17 @@ function updateApplicationList(applications) {
         return;
     }
     
+    // 获取当前时间
+    const currentTime = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
     listElement.innerHTML = '';
     applications.forEach(app => {
         const statusClass = app.status === 'normal' ? 'bg-success' : 'bg-danger';
@@ -717,7 +728,7 @@ function updateApplicationList(applications) {
                 <span class="badge ${statusClass}">${statusText}</span>
             </div>
             <div class="d-flex justify-content-between align-items-center">
-                <small class="text-muted">${app.time}</small>
+                <small class="text-muted">${currentTime}</small>
                 <small class="text-muted">
                     <i class="bi bi-stopwatch"></i> 耗时: ${executionTime}秒
                 </small>
@@ -737,12 +748,23 @@ function updateDatabaseList(databases) {
         return;
     }
     
+    // 获取当前时间
+    const currentTime = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
     listElement.innerHTML = '';
     databases.forEach(db => {
         const statusClass = db.status === 'normal' ? 'bg-success' : 'bg-danger';
         const statusText = db.status === 'normal' ? '在线' : '离线';
         
-        // 解析数据获取execution_time
+        // 解析数据库数据获取execution_time
         let dbData = {};
         try {
             dbData = typeof db.data === 'string' ? JSON.parse(db.data) : db.data;
@@ -760,7 +782,7 @@ function updateDatabaseList(databases) {
                 <span class="badge ${statusClass}">${statusText}</span>
             </div>
             <div class="d-flex justify-content-between align-items-center">
-                <small class="text-muted">${db.time}</small>
+                <small class="text-muted">${currentTime}</small>
                 <small class="text-muted">
                     <i class="bi bi-stopwatch"></i> 耗时: ${executionTime}秒
                 </small>
@@ -783,6 +805,17 @@ function updateBusinessMetricsList(business) {
         listElement.innerHTML = '<div class="col-12"><div class="text-muted text-center py-3">暂无业务指标监控</div></div>';
         return;
     }
+    
+    // 获取当前时间
+    const currentTime = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
     
     listElement.innerHTML = '';
     business.forEach(biz => {
@@ -851,7 +884,7 @@ function updateBusinessMetricsList(business) {
                         ${detailHtml}
                         <div class="mt-2">
                             <small class="text-muted">
-                                <i class="bi bi-clock"></i> ${biz.time}
+                                <i class="bi bi-clock"></i> ${currentTime}
                             </small>
                         </div>
                     </div>
@@ -879,6 +912,17 @@ function updateBackupFilesList(backups) {
         listElement.innerHTML = '<div class="col-12"><div class="text-muted text-center py-3">暂无备份文件监控</div></div>';
         return;
     }
+    
+    // 获取当前时间
+    const currentTime = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
     
     listElement.innerHTML = '';
     backups.forEach(backup => {
@@ -970,7 +1014,7 @@ function updateBackupFilesList(backups) {
                         ${filesHtml}
                         <div class="mt-2">
                             <small class="text-muted">
-                                <i class="bi bi-clock"></i> ${backup.time}
+                                <i class="bi bi-clock"></i> ${currentTime}
                             </small>
                         </div>
                     </div>

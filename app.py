@@ -199,9 +199,10 @@ def dashboard():
     cursor.execute('SELECT COUNT(*) as total FROM monitor_targets WHERE enabled = 1')
     total_targets = cursor.fetchone()['total']
     
+    # 统计近1小时的告警数量
     cursor.execute('''
-        SELECT COUNT(*) as count FROM monitor_data 
-        WHERE status = "error" AND created_at > datetime("now", "-1 hour")
+        SELECT COUNT(*) as count FROM alerts 
+        WHERE created_at > datetime("now", "-1 hour")
     ''')
     error_count = cursor.fetchone()['count']
     
